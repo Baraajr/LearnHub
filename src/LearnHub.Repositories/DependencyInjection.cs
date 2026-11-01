@@ -1,4 +1,6 @@
 using LearnHub.Data;
+using LearnHub.Repositories.Implementations;
+using LearnHub.Repositories.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -13,7 +15,9 @@ public static class DependencyInjection
     {
         services.AddData(configuration);
 
-        // Register repositories here.
+        services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         return services;
     }
