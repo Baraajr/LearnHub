@@ -1,5 +1,7 @@
 using System.Text;
 using LearnHub.Repositories;
+using LearnHub.Services.Auth;
+using LearnHub.Services.Auth.Interfaces;
 using LearnHub.Services.Options;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,12 +25,20 @@ public static class DependencyInjection
                 options.Issuer = configuration["JWT_ISSUER"] ?? "";
                 options.Audience = configuration["JWT_AUDIENCE"] ?? "";
                 options.Secret = configuration["JWT_SECRET"] ?? "";
-                options.ExpirationSeconds = int.TryParse(
-                    configuration["JWT_EXPIRATION_SECONDS"],
-                    out var expirationSeconds
+
+                options.AccessTokenLifetimeMinutes = int.TryParse(
+                    configuration["JWT_ACCESS_TOKEN_EXPIRATION_MINUTES"],
+                    out var accessMinutes
                 )
-                    ? expirationSeconds
-                    : 87400.00f;
+                    ? accessMinutes
+                    : 15;
+
+                options.RefreshTokenLifetimeDays = int.TryParse(
+                    configuration["JWT_REFRESH_TOKEN_EXPIRATION_DAYS"],
+                    out var refreshDays
+                )
+                    ? refreshDays
+                    : 7;
             })
             .Validate(o => !string.IsNullOrWhiteSpace(o.Issuer), "JWT Issuer is required")
             .Validate(o => !string.IsNullOrWhiteSpace(o.Audience), "JWT Audience is required")
@@ -38,10 +48,18 @@ public static class DependencyInjection
                     && Encoding.UTF8.GetByteCount(o.Secret) >= 32,
                 "JWT Secret must be at least 32 bytes"
             )
-            .Validate(o => o.ExpirationSeconds > 0, "JWT expiration must be greater than zero.")
+            .Validate(
+                o => o.AccessTokenLifetimeMinutes > 0,
+                "Access token expiration must be greater than zero."
+            )
+            .Validate(
+                o => o.RefreshTokenLifetimeDays > 0,
+                "Refresh tokens expiration must be greater than zero."
+            )
             .ValidateOnStart();
 
-        // Register services here.
+        services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<ITokenService, TokenService>();
 
         return services;
     }
