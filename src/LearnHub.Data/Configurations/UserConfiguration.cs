@@ -1,4 +1,5 @@
 using LearnHub.Data.Entities;
+using LearnHub.Data.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -27,5 +28,12 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.CreatedAt).IsRequired();
 
         builder.Property(u => u.UpdatedAt).IsRequired(false);
+
+        // database let undefined roles through
+        // so we make db validation level
+        // we also validated in service
+        var validRoles = string.Join(", ", Enum.GetNames<UserRole>().Select(role => $"'{role}'"));
+
+        builder.ToTable(t => t.HasCheckConstraint("CK_Users_Role", $"[Role] IN ({validRoles})"));
     }
 }

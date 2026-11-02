@@ -188,7 +188,10 @@ namespace LearnHub.Data.Migrations
                     b.HasIndex("Email")
                         .IsUnique();
 
-                    b.ToTable("Users");
+                    b.ToTable("Users", t =>
+                        {
+                            t.HasCheckConstraint("CK_Users_Role", "[Role] IN ('ADMIN', 'STUDENT', 'INSTRUCTOR')");
+                        });
                 });
 
             modelBuilder.Entity("LearnHub.Data.Entities.InstructorProfile", b =>
