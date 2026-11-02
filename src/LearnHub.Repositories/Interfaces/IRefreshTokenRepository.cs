@@ -13,4 +13,5 @@ public interface IRefreshTokenRepository
     void Update(RefreshToken refreshToken);
 
     Task RevokeAllByUserIdAsync(Guid userId);
+    Task<bool> TryRevokeAsync(Guid tokenId);
 }

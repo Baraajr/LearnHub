@@ -39,4 +39,17 @@ public class RefreshTokenRepository(LearnHubDbContext context) : IRefreshTokenRe
                 setters.SetProperty(rt => rt.RevokedAt, DateTime.UtcNow)
             );
     }
+
+    public async Task<bool> TryRevokeAsync(Guid tokenId)
+    {
+        var affectedRows = await context
+            .RefreshTokens.Where(rt =>
+                rt.Id == tokenId && rt.RevokedAt == null && rt.ExpiresAt > DateTime.UtcNow
+            )
+            .ExecuteUpdateAsync(setters =>
+                setters.SetProperty(rt => rt.RevokedAt, DateTime.UtcNow)
+            );
+
+        return affectedRows == 1;
+    }
 }
