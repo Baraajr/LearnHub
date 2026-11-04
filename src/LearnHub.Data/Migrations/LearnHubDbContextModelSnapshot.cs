@@ -190,7 +190,7 @@ namespace LearnHub.Data.Migrations
 
                     b.ToTable("Users", t =>
                         {
-                            t.HasCheckConstraint("CK_Users_Role", "[Role] IN ('ADMIN', 'STUDENT', 'INSTRUCTOR')");
+                            t.HasCheckConstraint("CK_Users_Role", "[Role] IN ('SUPERADMIN', 'ADMIN', 'STUDENT', 'INSTRUCTOR')");
                         });
                 });
 
