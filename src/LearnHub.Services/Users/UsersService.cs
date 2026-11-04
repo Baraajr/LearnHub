@@ -51,13 +51,12 @@ public class UsersService(
 
     public async Task UpdateRoleAsync(Guid adminId, Guid userId, UserRole newRole)
     {
+        // 1. Guard Clauses & Input Validation
         if (adminId == userId)
             throw new InvalidOperationException("You cannot change your own role.");
 
-        if (newRole is not (UserRole.ADMIN or UserRole.STUDENT or UserRole.INSTRUCTOR))
-        {
-            throw new ArgumentException("Invalid target role.");
-        }
+        if (!Enum.IsDefined(typeof(UserRole), newRole) || newRole == UserRole.SUPERADMIN)
+            throw new ArgumentException("Invalid or unauthorized target role.");
 
         await unitOfWork.ExecuteInTransactionAsync(async () =>
         {
@@ -69,76 +68,90 @@ public class UsersService(
             if (user.Role == newRole)
                 return true;
 
-            if (user.Role == UserRole.ADMIN && user.IsActive)
-            {
-                var activeAdmins = await userRepo.CountActiveAsync(UserRole.ADMIN);
+            // 2. Business Rule: Protect the last active admin
+            await EnsureNotLastActiveAdminAsync(user.Role, user.IsActive);
 
-                if (activeAdmins <= 1)
-                    throw new InvalidOperationException(
-                        "Cannot change the role of the last active administrator."
-                    );
-            }
+            // 3. Handle Profile Transitions (Cleanup old profile)
+            await CleanupOldProfileAsync(userId, user.Role);
 
-            // Remove the student profile when leaving STUDENT.
-            if (user.Role == UserRole.STUDENT)
-            {
-                var studentProfile = await studentRepo.GetByUserIdAsync(userId);
+            // 4. Handle Profile Transitions (Initialize new profile)
+            await InitializeNewProfileAsync(userId, newRole);
 
-                if (studentProfile != null)
-                    await studentRepo.DeleteAsync(studentProfile);
-            }
-
-            if (user.Role == UserRole.INSTRUCTOR)
-            {
-                var instructorProfile = await instructorRepo.GetByUserIdAsync(userId);
-
-                if (instructorProfile != null)
-                    await instructorRepo.DeleteAsync(instructorProfile);
-            }
-
-            // Create a student profile when entering STUDENT.
-            if (newRole == UserRole.STUDENT)
-            {
-                await studentRepo.AddAsync(new StudentProfile { UserId = userId });
-            }
-
-            // Create or reset the instructor profile when entering INSTRUCTOR.
-            if (newRole == UserRole.INSTRUCTOR)
-            {
-                var instructorProfile = await instructorRepo.GetByUserIdAsync(userId);
-
-                if (instructorProfile == null)
-                {
-                    await instructorRepo.AddAsync(
-                        new InstructorProfile
-                        {
-                            UserId = userId,
-                            VerificationStatus = InstructorVerificationStatus.PENDING,
-                        }
-                    );
-                }
-                else
-                {
-                    instructorProfile.VerificationStatus = InstructorVerificationStatus.PENDING;
-
-                    instructorProfile.ReviewedBy = null;
-                    instructorProfile.ReviewedAt = null;
-                    instructorProfile.RejectionReason = null;
-
-                    await instructorRepo.UpdateAsync(instructorProfile);
-                }
-            }
-
+            // 5. Update User State
             user.Role = newRole;
             user.TokenVersion++;
             user.UpdatedAt = DateTime.UtcNow;
 
             userRepo.Update(user);
-
             await unitOfWork.SaveChangesAsync();
 
             return true;
         });
+    }
+
+    private async Task EnsureNotLastActiveAdminAsync(UserRole currentRole, bool isActive)
+    {
+        if (currentRole == UserRole.ADMIN && isActive)
+        {
+            var activeAdmins = await userRepo.CountActiveAsync(UserRole.ADMIN);
+            if (activeAdmins <= 1)
+            {
+                throw new InvalidOperationException(
+                    "Cannot change the role of the last active administrator."
+                );
+            }
+        }
+    }
+
+    private async Task CleanupOldProfileAsync(Guid userId, UserRole currentRole)
+    {
+        switch (currentRole)
+        {
+            case UserRole.STUDENT:
+                var studentProfile = await studentRepo.GetByUserIdAsync(userId);
+                if (studentProfile != null)
+                    await studentRepo.DeleteAsync(studentProfile);
+                break;
+
+            case UserRole.INSTRUCTOR:
+                var instructorProfile = await instructorRepo.GetByUserIdAsync(userId);
+                if (instructorProfile != null)
+                    await instructorRepo.DeleteAsync(instructorProfile);
+                break;
+        }
+    }
+
+    private async Task InitializeNewProfileAsync(Guid userId, UserRole newRole)
+    {
+        if (newRole == UserRole.STUDENT)
+        {
+            await studentRepo.AddAsync(new StudentProfile { UserId = userId });
+        }
+        else if (newRole == UserRole.INSTRUCTOR)
+        {
+            var instructorProfile = await instructorRepo.GetByUserIdAsync(userId);
+
+            if (instructorProfile == null)
+            {
+                await instructorRepo.AddAsync(
+                    new InstructorProfile
+                    {
+                        UserId = userId,
+                        VerificationStatus = InstructorVerificationStatus.PENDING,
+                    }
+                );
+            }
+            else
+            {
+                // Reset verification state if they are re-entering instructor role
+                instructorProfile.VerificationStatus = InstructorVerificationStatus.PENDING;
+                instructorProfile.ReviewedBy = null;
+                instructorProfile.ReviewedAt = null;
+                instructorProfile.RejectionReason = null;
+
+                await instructorRepo.UpdateAsync(instructorProfile);
+            }
+        }
     }
 
     private async Task<User> GetUserOrThrow(Guid userId, UserRole? role = null)
