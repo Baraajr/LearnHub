@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using LearnHub.Repositories.Interfaces;
 using LearnHub.Services;
@@ -12,22 +13,25 @@ DotNetEnv.Env.Load("../../.env");
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Services
 builder.Services.AddServices(builder.Configuration);
 
-builder.Services.AddControllers();
-
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddOpenApi();
-
+// Controllers
 builder
     .Services.AddControllers()
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
     });
 
-// jwt
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddOpenApi();
+
+// Authentication
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
+
+builder.Services.AddAuthorization();
 
 builder
     .Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
@@ -55,9 +59,12 @@ builder
             {
                 OnMessageReceived = context =>
                 {
-                    if (string.IsNullOrEmpty(context.Request.Headers.Authorization))
+                    if (
+                        !context.Request.Headers.ContainsKey("Authorization")
+                        && context.Request.Cookies.TryGetValue("access_token", out var token)
+                    )
                     {
-                        context.Token = context.Request.Cookies["access_token"];
+                        context.Token = token;
                     }
 
                     return Task.CompletedTask;
@@ -84,7 +91,6 @@ builder
 
                     var user = await userRepository.GetByIdAsync(userId);
 
-                    // check is user exists
                     if (user is null || user.TokenVersion != tokenVersion)
                     {
                         context.Fail("Token is no longer valid.");
@@ -97,10 +103,9 @@ builder
                         return;
                     }
 
-                    // Add current DB role to the authenticated user
+                    // Synchronize role with the database.
                     var identity = context.Principal!.Identity as ClaimsIdentity;
 
-                    // update user role from db incase user Role was chnaged
                     if (identity is not null)
                     {
                         foreach (var claim in identity.FindAll(ClaimTypes.Role).ToList())
@@ -112,16 +117,11 @@ builder
                     }
                     context.HttpContext.Items["User"] = user;
                 },
-
-                OnAuthenticationFailed = context =>
-                {
-                    Console.WriteLine($"JWT authentication failed: {context.Exception.Message}");
-
-                    return Task.CompletedTask;
-                },
             };
         }
     );
+
+// Application
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -131,6 +131,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(options =>
     {
         options.SwaggerEndpoint("/openapi/v1.json", "LearnHub API V1");
+        options.ConfigObject.AdditionalItems["withCredentials"] = true;
     });
 }
 
@@ -144,3 +145,5 @@ app.MapControllers();
 app.MapGet("/", () => "Welcome to LearnHub API");
 
 app.Run();
+
+public partial class Program { }
