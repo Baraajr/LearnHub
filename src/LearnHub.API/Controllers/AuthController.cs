@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using LearnHub.Data.Entities;
+using LearnHub.Data.Enums;
 using LearnHub.Services.Auth.DTOs;
 using LearnHub.Services.Auth.Interfaces;
 using LearnHub.Services.Options; // Ensure this points to your options namespace
@@ -137,7 +138,7 @@ public class AuthController(
 
     private void SetAccessCookie(string token)
     {
-        var expires = DateTimeOffset.UtcNow.AddSeconds(_jwtOptions.AccessTokenLifetimeSeconds);
+        var expires = DateTimeOffset.UtcNow.AddMinutes(_jwtOptions.AccessTokenLifetimeMinutes);
         Response.Cookies.Append("access_token", token, CreateCookieOptions("/", expires));
     }
 
