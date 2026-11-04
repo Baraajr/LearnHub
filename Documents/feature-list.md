@@ -54,12 +54,12 @@
 - Delete or deactivate student accounts.
 - Ensure only authorized administrators can manage student accounts.
 
-| Method   | Endpoint            | Description                            |
-| -------- | ------------------- | -------------------------------------- |
-| `GET`    | `/api/students`     | Get all students                       |
-| `GET`    | `/api/students/:id` | Get student details                    |
-| `PATCH`  | `/api/students/:id` | Update student information             |
-| `DELETE` | `/api/students/:id` | Delete or deactivate a student account |
+| Method   | Endpoint            | Description                  |
+| -------- | ------------------- | ---------------------------- |
+| `GET`    | `/api/students`     | Get all students             |
+| `GET`    | `/api/students/:id` | Get student details          |
+| `PATCH`  | `/api/students/:id` | Update student information   |
+| `DELETE` | `/api/students/:id` | deactivate a student account |
 
 ---
 
@@ -67,17 +67,17 @@
 
 - View all registered instructors.
 - View individual instructor information.
-- Edit instructor information.
-- Delete or deactivate instructor accounts.
+- Update instructor role.
+- deactivate instructor accounts.
 - View the verification status of each instructor.
 - Ensure only authorized administrators can manage instructor accounts.
 
-| Method   | Endpoint               | Description                                |
-| -------- | ---------------------- | ------------------------------------------ |
-| `GET`    | `/api/instructors`     | Get all instructors                        |
-| `GET`    | `/api/instructors/:id` | Get instructor details                     |
-| `PATCH`  | `/api/instructors/:id` | Update instructor information              |
-| `DELETE` | `/api/instructors/:id` | Delete or deactivate an instructor account |
+| Method   | Endpoint               | Description                      |
+| -------- | ---------------------- | -------------------------------- |
+| `GET`    | `/api/instructors`     | Get all instructors              |
+| `GET`    | `/api/instructors/:id` | Get instructor details           |
+| `PATCH`  | `/api/instructors/:id` | Update instructor role           |
+| `DELETE` | `/api/instructors/:id` | deactivate an instructor account |
 
 ---
 
