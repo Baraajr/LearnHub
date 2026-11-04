@@ -12,6 +12,8 @@ namespace LearnHub.Services.Auth;
 public class AuthService(
     ITokenService tokenService,
     IUserRepository userRepository,
+    IStudentProfileRepository studentRepository,
+    IInstructorProfileRepository instructorRepository,
     IUnitOfWork unitOfWork,
     IOptions<JwtOptions> jwtOptions
 ) : IAuthService
@@ -20,45 +22,69 @@ public class AuthService(
 
     public async Task<AuthResponseDto?> RegisterAsync(RegisterDto request)
     {
+        // Public registration is limited to STUDENT and INSTRUCTOR.
+        if (request.Role is not (UserRole.STUDENT or UserRole.INSTRUCTOR))
+            throw new ValidationException("Only student or instructor registration is allowed.");
+
         var email = request.Email.Trim().ToLowerInvariant();
 
         if (await userRepository.ExistsByEmailAsync(email))
             return null;
 
-        if (!Enum.IsDefined(typeof(UserRole), request.Role))
-            throw new ValidationException("Invalid user role.");
+        AuthResponseDto? response = null;
 
-        if (request.Role == UserRole.ADMIN)
-            throw new ValidationException("Admin registration is not allowed.");
-
-        var user = new User
+        // User, profile and refresh token are created atomically.
+        await unitOfWork.ExecuteInTransactionAsync(async () =>
         {
-            Name = request.Name.Trim(),
-            Email = email,
-            Role = request.Role,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-        };
-
-        await userRepository.AddAsync(user);
-        await unitOfWork.SaveChangesAsync();
-
-        var refreshToken = tokenService.GenerateRefreshToken();
-
-        await tokenService.CreateRefreshTokenAsync(
-            new RefreshToken
+            var user = new User
             {
-                UserId = user.Id,
-                TokenHash = tokenService.HashRefreshToken(refreshToken),
-                ExpiresAt = DateTime.UtcNow.AddDays(_jwtOptions.RefreshTokenLifetimeDays), // Dynamic
-            }
-        );
-        await unitOfWork.SaveChangesAsync();
+                Name = request.Name.Trim(),
+                Email = email,
+                Role = request.Role,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+            };
 
-        return new AuthResponseDto
-        {
-            AccessToken = tokenService.GenerateAccessToken(user),
-            RefreshToken = refreshToken,
-        };
+            await userRepository.AddAsync(user);
+            await unitOfWork.SaveChangesAsync(); // makes sure user.Id is available for the FKs
+
+            if (request.Role == UserRole.STUDENT)
+            {
+                await studentRepository.AddAsync(new StudentProfile { UserId = user.Id });
+            }
+            else // INSTRUCTOR
+            {
+                await instructorRepository.AddAsync(
+                    new InstructorProfile
+                    {
+                        UserId = user.Id,
+                        VerificationStatus = InstructorVerificationStatus.PENDING,
+                    }
+                );
+            }
+
+            var refreshToken = tokenService.GenerateRefreshToken();
+
+            await tokenService.CreateRefreshTokenAsync(
+                new RefreshToken
+                {
+                    UserId = user.Id,
+                    TokenHash = tokenService.HashRefreshToken(refreshToken),
+                    ExpiresAt = DateTime.UtcNow.AddDays(_jwtOptions.RefreshTokenLifetimeDays),
+                }
+            );
+
+            await unitOfWork.SaveChangesAsync();
+
+            response = new AuthResponseDto
+            {
+                AccessToken = tokenService.GenerateAccessToken(user),
+                RefreshToken = refreshToken,
+            };
+
+            return true;
+        });
+
+        return response;
     }
 
     public async Task<AuthResponseDto?> LoginAsync(LoginDto request)

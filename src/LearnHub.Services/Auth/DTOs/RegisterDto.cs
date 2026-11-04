@@ -20,6 +20,6 @@ public class RegisterDto
 
     [Required]
     [EnumDataType(typeof(UserRole))]
-    [DeniedValues(UserRole.ADMIN)]
+    [DeniedValues(UserRole.ADMIN, UserRole.SUPERADMIN)]
     public UserRole Role { get; set; }
 }
