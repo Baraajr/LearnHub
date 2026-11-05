@@ -5,6 +5,7 @@
 
 # dotenv files
 .env
+web.config
 
 # User-specific files
 *.rsuser
