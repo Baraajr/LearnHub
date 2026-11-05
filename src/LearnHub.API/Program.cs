@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using LearnHub.API.Middlewares;
 using LearnHub.Repositories.Interfaces;
 using LearnHub.Services;
 using LearnHub.Services.Options;
@@ -10,8 +11,9 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 DotNetEnv.Env.Load("../../.env");
-
 var builder = WebApplication.CreateBuilder(args);
+
+Console.WriteLine($"dev env: {builder.Environment.IsDevelopment()}");
 
 // Services
 builder.Services.AddServices(builder.Configuration);
@@ -124,16 +126,19 @@ builder
 // Application
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
+app.UseMiddleware<GlobalExceptionMiddleware>();
 
-    app.UseSwaggerUI(options =>
-    {
-        options.SwaggerEndpoint("/openapi/v1.json", "LearnHub API V1");
-        options.ConfigObject.AdditionalItems["withCredentials"] = true;
-    });
-}
+// if (app.Environment.IsDevelopment())
+// {
+app.MapOpenApi();
+
+app.UseSwaggerUI(options =>
+{
+    options.SwaggerEndpoint("/openapi/v1.json", "LearnHub API V1");
+    options.ConfigObject.AdditionalItems["withCredentials"] = true;
+});
+
+// }
 
 app.UseHttpsRedirection();
 
