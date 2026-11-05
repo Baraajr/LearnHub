@@ -32,6 +32,13 @@ public class AdminsController(IAdminService adminService) : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = admin.Id }, admin);
     }
 
+    [HttpPatch("{id:guid}/activate")]
+    public async Task<IActionResult> Activate(Guid id)
+    {
+        await adminService.ActivateAsync(id);
+        return NoContent();
+    }
+
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {

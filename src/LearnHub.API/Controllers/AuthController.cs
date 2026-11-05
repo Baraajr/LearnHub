@@ -1,8 +1,8 @@
 using System.Security.Claims;
 using LearnHub.Data.Entities;
-using LearnHub.Data.Enums;
 using LearnHub.Services.Auth.DTOs;
 using LearnHub.Services.Auth.Interfaces;
+using LearnHub.Services.Exceptions;
 using LearnHub.Services.Options; // Ensure this points to your options namespace
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -27,22 +27,26 @@ public class AuthController(
     {
         var result = await _authService.RegisterAsync(request);
 
-        if (result is null)
-            return Conflict(new { message = "Email already exists." });
+        if (result.AccessToken is not null && result.RefreshToken is not null)
+        {
+            SetAccessCookie(result.AccessToken);
+            SetRefreshCookie(result.RefreshToken);
+        }
 
-        SetAccessCookie(result.AccessToken);
-        SetRefreshCookie(result.RefreshToken);
-
-        return Ok(new { message = "Registered successfully." });
+        return Ok(
+            new
+            {
+                message = result.AccessToken is null
+                    ? "Registration successful. Your instructor account is awaiting verification."
+                    : "Registered successfully.",
+            }
+        );
     }
 
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginDto request)
     {
         var result = await _authService.LoginAsync(request);
-
-        if (result is null)
-            return Unauthorized(new { message = "Invalid credentials." });
 
         SetAccessCookie(result.AccessToken);
         SetRefreshCookie(result.RefreshToken);
@@ -58,17 +62,12 @@ public class AuthController(
             || string.IsNullOrWhiteSpace(refreshToken)
         )
         {
-            return Unauthorized(new { message = "Refresh token is missing." });
+            DeleteRefreshCookie();
+            DeleteAccessCookie();
+            throw new UnauthorizedException("Refresh token is missing.");
         }
 
         var result = await _authService.RefreshAsync(refreshToken);
-
-        if (result is null)
-        {
-            DeleteRefreshCookie();
-            DeleteAccessCookie();
-            return Unauthorized(new { message = "Invalid refresh token." });
-        }
 
         SetAccessCookie(result.AccessToken);
         SetRefreshCookie(result.RefreshToken);
@@ -100,7 +99,7 @@ public class AuthController(
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
         if (!Guid.TryParse(userIdClaim, out var userId))
-            return Unauthorized();
+            throw new UnauthorizedException("Invalid user identity.");
 
         await _authService.LogoutAllAsync(userId);
 
@@ -114,15 +113,11 @@ public class AuthController(
     [HttpGet("me")]
     public IActionResult Me()
     {
-        var user = HttpContext.Items["User"] as User;
-
-        if (user is null)
-            return Unauthorized();
-
+        var user =
+            HttpContext.Items["User"] as User
+            ?? throw new UnauthorizedException("Please login first");
         return Ok(MapToDto(user));
     }
-
-    // --- DRY COOKIE HELPERS ---
 
     private CookieOptions CreateCookieOptions(string path, DateTimeOffset? expires = null)
     {
