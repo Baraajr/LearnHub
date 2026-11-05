@@ -12,4 +12,5 @@ public interface IUsersService
     Task<User> SetActiveStatusAsync(Guid userId, bool isActive);
 
     Task UpdateRoleAsync(Guid adminId, Guid userId, UserRole newRole);
+    Task<bool> ExistsAsync(Guid userId, UserRole? role = null);
 }

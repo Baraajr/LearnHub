@@ -14,4 +14,5 @@ public interface IUserRepository
 
     Task AddAsync(User user);
     void Update(User user);
+    Task<bool> ExistsAsync(Guid userId, UserRole? role = null);
 }

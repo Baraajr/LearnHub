@@ -78,4 +78,14 @@ public class UserRepository(LearnHubDbContext context) : IUserRepository
     {
         context.Users.Update(user);
     }
+
+    public async Task<bool> ExistsAsync(Guid userId, UserRole? role = null)
+    {
+        var query = context.Users.Where(u => u.Id == userId);
+
+        if (role.HasValue)
+            query = query.Where(u => u.Role == role.Value);
+
+        return await query.AnyAsync();
+    }
 }
