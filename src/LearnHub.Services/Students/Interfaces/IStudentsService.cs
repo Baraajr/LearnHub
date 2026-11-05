@@ -9,4 +9,5 @@ public interface IStudentsService
     Task<StudentResponseDto> GetStudentByIdAsync(Guid userId);
     Task<User> UpdateRoleAsync(Guid adminId, Guid userId, ChangeRoleDto dto);
     Task<User> SetActiveStatus(Guid userId, bool isActive);
+    Task EnsureCanLoginAsync(Guid userId);
 }

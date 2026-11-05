@@ -7,6 +7,10 @@ public class ChangeRoleDto
 {
     [Required]
     [EnumDataType(typeof(UserRole))]
-    [DeniedValues(UserRole.ADMIN, UserRole.SUPERADMIN)]
+    [DeniedValues(
+        UserRole.ADMIN,
+        UserRole.SUPERADMIN,
+        ErrorMessage = "The selected role is not allowed."
+    )]
     public UserRole Role { get; set; }
 }

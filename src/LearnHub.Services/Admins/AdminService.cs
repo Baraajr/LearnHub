@@ -3,6 +3,7 @@ using LearnHub.Data.Enums;
 using LearnHub.Repositories.Interfaces;
 using LearnHub.Services.Admins.DTOs;
 using LearnHub.Services.Admins.Interfaces;
+using LearnHub.Services.Exceptions;
 using LearnHub.Services.Users.Interfaces;
 
 namespace LearnHub.Services.Admins;
@@ -30,7 +31,7 @@ public class AdminService(
         var email = dto.Email.Trim().ToLowerInvariant();
 
         if (await userRepository.ExistsByEmailAsync(email))
-            throw new InvalidOperationException("Email already exists.");
+            throw new ConflictException("Email already exists.");
 
         var admin = new User
         {
@@ -57,9 +58,21 @@ public class AdminService(
         var activeAdmins = await userRepository.CountActiveAsync(UserRole.ADMIN);
 
         if (activeAdmins <= 1)
-            throw new InvalidOperationException("Cannot deactivate the last active administrator.");
+            throw new ConflictException("Cannot deactivate the last active administrator.");
 
         admin.IsActive = false;
+
+        await unitOfWork.SaveChangesAsync();
+    }
+
+    public async Task ActivateAsync(Guid id)
+    {
+        var admin = await GetAdminOrThrow(id);
+
+        if (admin.IsActive)
+            return;
+
+        admin.IsActive = true;
 
         await unitOfWork.SaveChangesAsync();
     }
@@ -69,7 +82,7 @@ public class AdminService(
         var user = await userRepository.GetByIdAsync(id);
 
         if (user is null || user.Role != UserRole.ADMIN)
-            throw new KeyNotFoundException("Administrator not found.");
+            throw new NotFoundException("Administrator not found.");
 
         return user;
     }

@@ -1,6 +1,7 @@
 using LearnHub.Data.Entities;
 using LearnHub.Data.Enums;
 using LearnHub.Repositories.Interfaces;
+using LearnHub.Services.Exceptions;
 using LearnHub.Services.Instructors.DTOs;
 using LearnHub.Services.Instructors.Interfaces;
 using LearnHub.Services.Users.Interfaces;
@@ -26,18 +27,14 @@ public class InstructorsService(
         return MapToDto(instructor);
     }
 
-    public async Task<InstructorResponseDto> UpdateRoleAsync(
-        Guid adminId,
-        Guid userId,
-        UserRole newRole
-    )
+    public async Task<User> UpdateRoleAsync(Guid adminId, Guid userId, UserRole newRole)
     {
         // Only instructors can be changed through this endpoint.
         await GetInstructorOrThrow(userId);
 
         await usersService.UpdateRoleAsync(adminId, userId, newRole);
 
-        return MapToDto(await usersService.GetUserByIdAsync(userId));
+        return await usersService.GetUserByIdAsync(userId);
     }
 
     public async Task<InstructorResponseDto> SetActiveAsync(Guid userId, bool isActive)
@@ -51,7 +48,7 @@ public class InstructorsService(
     public async Task UpdateStatusAsync(Guid adminId, Guid userId, UpdateInstructorStatusDto dto)
     {
         if (!dto.Status.HasValue || !Enum.IsDefined(dto.Status.Value))
-            throw new ArgumentException("Invalid verification status.");
+            throw new BadRequestException("Invalid verification status.");
 
         var status = dto.Status.Value;
         var rejectionReason = dto.RejectionReason?.Trim();
@@ -61,20 +58,16 @@ public class InstructorsService(
             && string.IsNullOrWhiteSpace(rejectionReason)
         )
         {
-            throw new ArgumentException(
-                "A rejection reason is required.",
-                nameof(dto.RejectionReason)
-            );
+            throw new BadRequestException("A rejection reason is required.");
         }
 
         var user = await GetInstructorOrThrow(userId);
 
         InstructorProfile profile =
-            user.InstructorProfile
-            ?? throw new InvalidOperationException("Instructor profile not found.");
+            user.InstructorProfile ?? throw new NotFoundException("Instructor profile not found.");
 
         if (profile.VerificationStatus == status)
-            throw new InvalidOperationException("Instructor already has this verification status.");
+            throw new ConflictException("Instructor already has this verification status.");
 
         var reason = status == InstructorVerificationStatus.REJECTED ? rejectionReason : null;
 
@@ -99,6 +92,29 @@ public class InstructorsService(
         );
 
         await unitOfWork.SaveChangesAsync();
+    }
+
+    public async Task EnsureCanLoginAsync(Guid userId)
+    {
+        var instructor = await GetInstructorOrThrow(userId);
+
+        if (!instructor.IsActive)
+            throw new ForbiddenException("Your instructor account is inactive.");
+
+        switch (instructor.InstructorProfile.VerificationStatus)
+        {
+            case InstructorVerificationStatus.PENDING:
+                throw new ForbiddenException("Your instructor account is awaiting verification.");
+
+            case InstructorVerificationStatus.REJECTED:
+                throw new ForbiddenException("Your instructor application has been rejected.");
+
+            case InstructorVerificationStatus.VERIFIED:
+                return;
+
+            default:
+                throw new ForbiddenException("Your instructor account cannot access the platform.");
+        }
     }
 
     public async Task<List<InstructorVerificationHistoryDto>> GetVerificationHistoryAsync(
@@ -144,12 +160,6 @@ public class InstructorsService(
 
     private async Task<User> GetInstructorOrThrow(Guid userId)
     {
-        var instructor = await usersService.GetUserByIdAsync(userId, UserRole.INSTRUCTOR);
-
-        // A stale profile left over from a former instructor must not count.
-        if (instructor == null || instructor.Role != UserRole.INSTRUCTOR)
-            throw new KeyNotFoundException("Instructor not found.");
-
-        return instructor;
+        return await usersService.GetUserByIdAsync(userId, UserRole.INSTRUCTOR);
     }
 }

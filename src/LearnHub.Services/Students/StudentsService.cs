@@ -1,5 +1,6 @@
 using LearnHub.Data.Entities;
 using LearnHub.Data.Enums;
+using LearnHub.Services.Exceptions;
 using LearnHub.Services.Students.DTOs;
 using LearnHub.Services.Students.Interfaces;
 using LearnHub.Services.Users.Interfaces;
@@ -37,6 +38,14 @@ public class StudentsService(IUsersService usersService) : IStudentsService
         return user;
     }
 
+    public async Task EnsureCanLoginAsync(Guid userId)
+    {
+        var student = await GetStudentOrThrow(userId);
+
+        if (!student.IsActive)
+            throw new ForbiddenException("Your student account is inactive.");
+    }
+
     private static StudentResponseDto MapToDto(User user)
     {
         return new StudentResponseDto
@@ -51,11 +60,6 @@ public class StudentsService(IUsersService usersService) : IStudentsService
 
     private async Task<User> GetStudentOrThrow(Guid id)
     {
-        var student = await usersService.GetUserByIdAsync(id, UserRole.STUDENT);
-
-        if (student == null || student.Role != UserRole.STUDENT)
-            throw new KeyNotFoundException("Student not found.");
-
-        return student;
+        return await usersService.GetUserByIdAsync(id, UserRole.STUDENT);
     }
 }

@@ -12,4 +12,5 @@ public interface IAdminService
     Task<AdminDto> CreateAsync(CreateAdminDto dto);
 
     Task DeleteAsync(Guid id);
+    Task ActivateAsync(Guid id);
 }

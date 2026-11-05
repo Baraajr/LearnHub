@@ -1,6 +1,7 @@
 using LearnHub.Data.Entities;
 using LearnHub.Data.Enums;
 using LearnHub.Repositories.Interfaces;
+using LearnHub.Services.Exceptions;
 using LearnHub.Services.Users.Interfaces;
 
 namespace LearnHub.Services.Users;
@@ -35,9 +36,7 @@ public class UsersService(
             var activeAdmins = await userRepo.CountActiveAsync(UserRole.ADMIN);
 
             if (activeAdmins <= 1)
-                throw new InvalidOperationException(
-                    "Cannot deactivate the last active administrator."
-                );
+                throw new ConflictException("Cannot deactivate the last active administrator.");
         }
 
         user.IsActive = isActive;
@@ -53,17 +52,17 @@ public class UsersService(
     {
         // 1. Guard Clauses & Input Validation
         if (adminId == userId)
-            throw new InvalidOperationException("You cannot change your own role.");
+            throw new BadRequestException("You cannot change your own role.");
 
         if (!Enum.IsDefined(typeof(UserRole), newRole) || newRole == UserRole.SUPERADMIN)
-            throw new ArgumentException("Invalid or unauthorized target role.");
+            throw new BadRequestException("Invalid or unauthorized target role.");
 
         await unitOfWork.ExecuteInTransactionAsync(async () =>
         {
             var user = await GetUserOrThrow(userId);
 
             if (user.Role == UserRole.SUPERADMIN)
-                throw new InvalidOperationException("Superadmin role cannot be changed.");
+                throw new BadRequestException("Superadmin role cannot be changed.");
 
             if (user.Role == newRole)
                 return true;
@@ -96,7 +95,7 @@ public class UsersService(
             var activeAdmins = await userRepo.CountActiveAsync(UserRole.ADMIN);
             if (activeAdmins <= 1)
             {
-                throw new InvalidOperationException(
+                throw new ConflictException(
                     "Cannot change the role of the last active administrator."
                 );
             }
@@ -154,11 +153,14 @@ public class UsersService(
         }
     }
 
+    public async Task<bool> ExistsAsync(Guid userId, UserRole? role = null)
+    {
+        return await userRepo.ExistsAsync(userId, role);
+    }
+
     private async Task<User> GetUserOrThrow(Guid userId, UserRole? role = null)
     {
-        var user =
-            await userRepo.GetByIdAsync(userId, role)
-            ?? throw new KeyNotFoundException("User not found.");
-        return user;
+        return await userRepo.GetByIdAsync(userId, role)
+            ?? throw new NotFoundException("User not found.");
     }
 }
