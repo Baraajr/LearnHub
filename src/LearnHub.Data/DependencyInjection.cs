@@ -14,7 +14,8 @@ public static class DependencyInjection
         IConfiguration configuration
     )
     {
-        var connectionString = configuration["DB_CONNECTION_STRING"];
+        var connectionString =
+            "workstation id=learnhub.mssql.somee.com;packet size=4096;user id=baraajr1_SQLLogin_1;pwd=test1234;data source=learnhub.mssql.somee.com;persist security info=False;initial catalog=learnhub;TrustServerCertificate=True";
 
         if (string.IsNullOrWhiteSpace(connectionString))
             throw new InvalidOperationException("DB_CONNECTION_STRING is not configured.");
