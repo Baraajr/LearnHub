@@ -5,7 +5,10 @@ using LearnHub.Repositories.Interfaces;
 using LearnHub.Services.Auth;
 using LearnHub.Services.Auth.DTOs;
 using LearnHub.Services.Auth.Interfaces;
+using LearnHub.Services.Exceptions;
+using LearnHub.Services.Instructors.Interfaces;
 using LearnHub.Services.Options;
+using LearnHub.Services.Students.Interfaces;
 using Microsoft.Extensions.Options;
 using Moq;
 
@@ -15,8 +18,13 @@ public class AuthServiceTests
 {
     private readonly Mock<ITokenService> _tokenService = new();
     private readonly Mock<IUserRepository> _userRepository = new();
-    private readonly Mock<IStudentProfileRepository> _studentRepository = new();
-    private readonly Mock<IInstructorProfileRepository> _instructorRepository = new();
+
+    private readonly Mock<IStudentsService> _studentsService = new();
+    private readonly Mock<IInstructorsService> _instructorsService = new();
+
+    private readonly Mock<IStudentProfileRepository> _studentProfileRepository = new();
+    private readonly Mock<IInstructorProfileRepository> _instructorProfileRepository = new();
+
     private readonly Mock<IUnitOfWork> _unitOfWork = new();
 
     private readonly AuthService _sut;
@@ -26,8 +34,10 @@ public class AuthServiceTests
         _sut = new AuthService(
             _tokenService.Object,
             _userRepository.Object,
-            _studentRepository.Object,
-            _instructorRepository.Object,
+            _studentsService.Object,
+            _instructorsService.Object,
+            _studentProfileRepository.Object,
+            _instructorProfileRepository.Object,
             _unitOfWork.Object,
             Options.Create(
                 new JwtOptions
@@ -85,7 +95,7 @@ public class AuthServiceTests
             })
             .Returns(Task.CompletedTask);
 
-        _studentRepository
+        _studentProfileRepository
             .Setup(x => x.AddAsync(It.IsAny<StudentProfile>()))
             .Callback<StudentProfile>(profile => createdProfile = profile)
             .Returns(Task.CompletedTask);
@@ -130,7 +140,10 @@ public class AuthServiceTests
             expectedExpiry.AddSeconds(-5),
             expectedExpiry.AddSeconds(5)
         );
-        _instructorRepository.Verify(x => x.AddAsync(It.IsAny<InstructorProfile>()), Times.Never);
+        _instructorProfileRepository.Verify(
+            x => x.AddAsync(It.IsAny<InstructorProfile>()),
+            Times.Never
+        );
 
         _unitOfWork.Verify(x => x.SaveChangesAsync(), Times.Exactly(2));
     }
@@ -156,7 +169,7 @@ public class AuthServiceTests
             })
             .Returns(Task.CompletedTask);
 
-        _instructorRepository
+        _instructorProfileRepository
             .Setup(x => x.AddAsync(It.IsAny<InstructorProfile>()))
             .Callback<InstructorProfile>(profile => createdProfile = profile)
             .Returns(Task.CompletedTask);
@@ -182,7 +195,7 @@ public class AuthServiceTests
         Assert.Equal(userId, createdProfile.UserId);
         Assert.Equal(InstructorVerificationStatus.PENDING, createdProfile.VerificationStatus);
 
-        _studentRepository.Verify(x => x.AddAsync(It.IsAny<StudentProfile>()), Times.Never);
+        _studentProfileRepository.Verify(x => x.AddAsync(It.IsAny<StudentProfile>()), Times.Never);
     }
 
     [Theory]
@@ -200,7 +213,7 @@ public class AuthServiceTests
         };
 
         // Act
-        var exception = await Assert.ThrowsAsync<ValidationException>(() =>
+        var exception = await Assert.ThrowsAsync<BadRequestException>(() =>
             _sut.RegisterAsync(request)
         );
 
@@ -229,11 +242,8 @@ public class AuthServiceTests
             Role = UserRole.STUDENT,
         };
 
-        // Act
-        var result = await _sut.RegisterAsync(request);
-
         // Assert
-        Assert.Null(result);
+        await Assert.ThrowsAsync<ConflictException>(() => _sut.RegisterAsync(request));
 
         _userRepository.Verify(x => x.AddAsync(It.IsAny<User>()), Times.Never);
 
@@ -250,9 +260,8 @@ public class AuthServiceTests
         _userRepository.Setup(x => x.ExistsByEmailAsync(It.IsAny<string>())).ReturnsAsync(false);
 
         _unitOfWork
-            .Setup(x => x.ExecuteInTransactionAsync(It.IsAny<Func<Task<bool>>>()))
+            .Setup(x => x.ExecuteInTransactionAsync(It.IsAny<Func<Task<AuthResponseDto>>>()))
             .ThrowsAsync(new Exception("Database error"));
-
         var request = new RegisterDto
         {
             Name = "Baraa",
@@ -317,13 +326,10 @@ public class AuthServiceTests
             .Setup(x => x.GetByEmailAsync(It.IsAny<string>()))
             .ReturnsAsync((User?)null);
 
-        // Act
-        var result = await _sut.LoginAsync(
-            new LoginDto { Email = "unknown@gmail.com", Password = "password123" }
-        );
-
         // Assert
-        Assert.Null(result);
+        await Assert.ThrowsAsync<UnauthorizedException>(() =>
+            _sut.LoginAsync(new LoginDto { Email = "unknown@gmail.com", Password = "password123" })
+        );
 
         _tokenService.Verify(x => x.GenerateRefreshToken(), Times.Never);
 
@@ -344,13 +350,9 @@ public class AuthServiceTests
 
         _userRepository.Setup(x => x.GetByEmailAsync("baraa@gmail.com")).ReturnsAsync(user);
 
-        // Act
-        var result = await _sut.LoginAsync(
-            new LoginDto { Email = "baraa@gmail.com", Password = "wrong-password" }
+        await Assert.ThrowsAsync<UnauthorizedException>(() =>
+            _sut.LoginAsync(new LoginDto { Email = "unknown@gmail.com", Password = "password123" })
         );
-
-        // Assert
-        Assert.Null(result);
 
         _tokenService.Verify(x => x.GenerateRefreshToken(), Times.Never);
 
@@ -371,13 +373,9 @@ public class AuthServiceTests
 
         _userRepository.Setup(x => x.GetByEmailAsync("baraa@gmail.com")).ReturnsAsync(user);
 
-        // Act
-        var result = await _sut.LoginAsync(
-            new LoginDto { Email = "baraa@gmail.com", Password = "password123" }
+        await Assert.ThrowsAsync<UnauthorizedException>(() =>
+            _sut.LoginAsync(new LoginDto { Email = "unknown@gmail.com", Password = "password123" })
         );
-
-        // Assert
-        Assert.Null(result);
 
         _tokenService.Verify(x => x.GenerateRefreshToken(), Times.Never);
 
@@ -388,7 +386,14 @@ public class AuthServiceTests
     public async Task LoginAsync_EmailWithWhitespaceAndUppercase_NormalizesEmail()
     {
         // Arrange
-        _userRepository.Setup(x => x.GetByEmailAsync("baraa@gmail.com")).ReturnsAsync((User?)null);
+        var user = new User
+        {
+            Email = "baraa@gmail.com",
+            IsActive = true,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("password123"),
+        };
+
+        _userRepository.Setup(x => x.GetByEmailAsync("baraa@gmail.com")).ReturnsAsync(user);
 
         // Act
         await _sut.LoginAsync(
@@ -490,11 +495,7 @@ public class AuthServiceTests
             .Setup(x => x.GetRefreshTokenAsync("invalid-hash"))
             .ReturnsAsync((RefreshToken?)null);
 
-        // Act
-        var result = await _sut.RefreshAsync("invalid-token");
-
-        // Assert
-        Assert.Null(result);
+        await Assert.ThrowsAsync<UnauthorizedException>(() => _sut.RefreshAsync("invalid-token"));
 
         _userRepository.Verify(
             x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<UserRole?>()),
@@ -521,11 +522,7 @@ public class AuthServiceTests
 
         _tokenService.Setup(x => x.GetRefreshTokenAsync(It.IsAny<string>())).ReturnsAsync(token);
 
-        // Act
-        var result = await _sut.RefreshAsync("old-token");
-
-        // Assert
-        Assert.Null(result);
+        await Assert.ThrowsAsync<UnauthorizedException>(() => _sut.RefreshAsync("old-token"));
 
         _userRepository.Verify(
             x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<UserRole?>()),
@@ -546,11 +543,7 @@ public class AuthServiceTests
 
         _tokenService.Setup(x => x.GetRefreshTokenAsync(It.IsAny<string>())).ReturnsAsync(token);
 
-        // Act
-        var result = await _sut.RefreshAsync("expired-token");
-
-        // Assert
-        Assert.Null(result);
+        await Assert.ThrowsAsync<UnauthorizedException>(() => _sut.RefreshAsync("expired-token"));
 
         _userRepository.Verify(
             x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<UserRole?>()),
@@ -568,11 +561,7 @@ public class AuthServiceTests
 
         _userRepository.Setup(x => x.GetByIdAsync(token.UserId)).ReturnsAsync((User?)null);
 
-        // Act
-        var result = await _sut.RefreshAsync("old-token");
-
-        // Assert
-        Assert.Null(result);
+        await Assert.ThrowsAsync<UnauthorizedException>(() => _sut.RefreshAsync("old-token"));
 
         _tokenService.Verify(x => x.TryRevokeRefreshTokenAsync(It.IsAny<Guid>()), Times.Never);
     }
@@ -590,10 +579,7 @@ public class AuthServiceTests
             .ReturnsAsync(new User { Id = token.UserId, IsActive = false });
 
         // Act
-        var result = await _sut.RefreshAsync("old-token");
-
-        // Assert
-        Assert.Null(result);
+        await Assert.ThrowsAsync<UnauthorizedException>(() => _sut.RefreshAsync("old-token"));
 
         _tokenService.Verify(x => x.TryRevokeRefreshTokenAsync(It.IsAny<Guid>()), Times.Never);
     }
@@ -613,10 +599,7 @@ public class AuthServiceTests
         _tokenService.Setup(x => x.TryRevokeRefreshTokenAsync(token.Id)).ReturnsAsync(false);
 
         // Act
-        var result = await _sut.RefreshAsync("old-token");
-
-        // Assert
-        Assert.Null(result);
+        await Assert.ThrowsAsync<UnauthorizedException>(() => _sut.RefreshAsync("old-token"));
 
         _tokenService.Verify(x => x.CreateRefreshTokenAsync(It.IsAny<RefreshToken>()), Times.Never);
 
@@ -764,8 +747,7 @@ public class AuthServiceTests
         _userRepository.Setup(x => x.GetByIdAsync(userId)).ReturnsAsync((User?)null);
 
         // Act
-        await _sut.LogoutAllAsync(userId);
-        // Assert
+        await Assert.ThrowsAsync<NotFoundException>(() => _sut.LogoutAllAsync(userId));
 
         _tokenService.Verify(x => x.RevokeAllRefreshTokensAsync(It.IsAny<Guid>()), Times.Never);
 
