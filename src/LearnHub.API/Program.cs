@@ -10,10 +10,12 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
-DotNetEnv.Env.Load("../../.env");
 var builder = WebApplication.CreateBuilder(args);
-
+var envPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "../../.env"));
+Console.WriteLine($"Loading env from: {envPath}, exists: {File.Exists(envPath)}");
+DotNetEnv.Env.Load(envPath);
 Console.WriteLine($"dev env: {builder.Environment.IsDevelopment()}");
+builder.Configuration.AddEnvironmentVariables();
 
 // Services
 builder.Services.AddServices(builder.Configuration);
