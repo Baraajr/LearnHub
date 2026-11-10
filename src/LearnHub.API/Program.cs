@@ -1,6 +1,5 @@
 using System.Security.Claims;
 using System.Text;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using LearnHub.API.Middlewares;
 using LearnHub.Repositories.Interfaces;
@@ -11,11 +10,6 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
-var envPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "../../.env"));
-Console.WriteLine($"Loading env from: {envPath}, exists: {File.Exists(envPath)}");
-DotNetEnv.Env.Load(envPath);
-Console.WriteLine($"dev env: {builder.Environment.IsDevelopment()}");
-builder.Configuration.AddEnvironmentVariables();
 
 // Services
 builder.Services.AddServices(builder.Configuration);

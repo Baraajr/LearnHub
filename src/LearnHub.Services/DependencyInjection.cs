@@ -26,28 +26,10 @@ public static class DependencyInjection
         services.AddRepositories(configuration);
 
         // JwtOptions
+        // JWT Options
         services
             .AddOptions<JwtOptions>()
-            .Configure(options =>
-            {
-                options.Issuer = configuration["JWT_ISSUER"] ?? "";
-                options.Audience = configuration["JWT_AUDIENCE"] ?? "";
-                options.Secret = configuration["JWT_SECRET"] ?? "";
-
-                options.AccessTokenLifetimeMinutes = int.TryParse(
-                    configuration["JWT_ACCESS_TOKEN_EXPIRATION_MINUTES"],
-                    out var accessMinutes
-                )
-                    ? accessMinutes
-                    : 15;
-
-                options.RefreshTokenLifetimeDays = int.TryParse(
-                    configuration["JWT_REFRESH_TOKEN_EXPIRATION_DAYS"],
-                    out var refreshDays
-                )
-                    ? refreshDays
-                    : 7;
-            })
+            .Bind(configuration.GetSection(JwtOptions.SectionName))
             .Validate(o => !string.IsNullOrWhiteSpace(o.Issuer), "JWT Issuer is required")
             .Validate(o => !string.IsNullOrWhiteSpace(o.Audience), "JWT Audience is required")
             .Validate(
@@ -62,7 +44,7 @@ public static class DependencyInjection
             )
             .Validate(
                 o => o.RefreshTokenLifetimeDays > 0,
-                "Refresh tokens expiration must be greater than zero."
+                "Refresh token expiration must be greater than zero."
             )
             .ValidateOnStart();
 
