@@ -48,13 +48,26 @@ public class StudentsService(IUsersService usersService) : IStudentsService
 
     private static StudentResponseDto MapToDto(User user)
     {
+        var profile = user.StudentProfile!;
+
         return new StudentResponseDto
         {
             Id = user.Id,
             Name = user.Name,
             Email = user.Email,
             IsActive = user.IsActive,
-            CreatedAt = user.CreatedAt,
+
+            // Student profile audit
+            CreatedAt = profile.CreatedAt,
+            CreatedBy = profile.CreatedBy,
+            UpdatedAt = profile.UpdatedAt,
+            UpdatedBy = profile.UpdatedBy,
+
+            // User account audit
+            AccountCreatedAt = user.CreatedAt,
+            AccountCreatedBy = user.CreatedBy,
+            AccountUpdatedAt = user.UpdatedAt,
+            AccountUpdatedBy = user.UpdatedBy,
         };
     }
 

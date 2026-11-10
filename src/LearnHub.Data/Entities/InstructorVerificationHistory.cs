@@ -1,8 +1,9 @@
 using LearnHub.Data.Enums;
+using LearnHub.Data.Interfaces;
 
 namespace LearnHub.Data.Entities;
 
-public class InstructorVerificationHistory
+public class InstructorVerificationHistory : ICreationTracked
 {
     public Guid Id { get; set; }
 
@@ -17,6 +18,7 @@ public class InstructorVerificationHistory
     public string? Reason { get; set; }
 
     public DateTime CreatedAt { get; set; }
+    public string? CreatedBy { get; set; }
 
     public InstructorProfile Instructor { get; set; } = null!;
 

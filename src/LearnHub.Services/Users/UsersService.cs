@@ -41,7 +41,6 @@ public class UsersService(
 
         user.IsActive = isActive;
         user.TokenVersion++;
-        user.UpdatedAt = DateTime.UtcNow;
 
         userRepo.Update(user);
         await unitOfWork.SaveChangesAsync();
@@ -79,7 +78,6 @@ public class UsersService(
             // 5. Update User State
             user.Role = newRole;
             user.TokenVersion++;
-            user.UpdatedAt = DateTime.UtcNow;
 
             userRepo.Update(user);
             await unitOfWork.SaveChangesAsync();

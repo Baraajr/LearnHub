@@ -21,7 +21,6 @@ public class StudentProfileRepository(LearnHubDbContext context) : IStudentProfi
 
     public async Task AddAsync(StudentProfile profile)
     {
-        profile.CreatedAt = DateTime.UtcNow;
         await context.StudentProfiles.AddAsync(profile);
     }
 

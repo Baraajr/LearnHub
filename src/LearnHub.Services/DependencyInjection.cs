@@ -1,4 +1,5 @@
 using System.Text;
+using LearnHub.Data.Interfaces;
 using LearnHub.Repositories;
 using LearnHub.Services.Admins;
 using LearnHub.Services.Admins.Interfaces;
@@ -54,6 +55,7 @@ public static class DependencyInjection
         services.AddScoped<IUsersService, UsersService>();
         services.AddScoped<IInstructorsService, InstructorsService>();
         services.AddScoped<IStudentsService, StudentsService>();
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
 
         return services;
     }

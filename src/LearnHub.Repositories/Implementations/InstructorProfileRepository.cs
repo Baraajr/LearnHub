@@ -51,8 +51,6 @@ public class InstructorProfileRepository(LearnHubDbContext context) : IInstructo
 
     public async Task AddAsync(InstructorProfile profile)
     {
-        profile.CreatedAt = DateTime.UtcNow;
-
         await context.InstructorProfiles.AddAsync(profile);
     }
 

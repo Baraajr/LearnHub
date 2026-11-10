@@ -1,4 +1,5 @@
 using LearnHub.Data.Context;
+using LearnHub.Data.Interceptors;
 using LearnHub.Data.Options;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -23,7 +24,18 @@ public static class DependencyInjection
         services.AddDbContext<LearnHubDbContext>(options =>
             options.UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure())
         );
+        services.AddHttpContextAccessor();
 
+        services.AddSingleton(TimeProvider.System);
+
+        services.AddScoped<AuditSaveChangesInterceptor>();
+
+        services.AddDbContext<LearnHubDbContext>(
+            (sp, options) =>
+                options
+                    .UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure())
+                    .AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>())
+        );
         return services;
     }
 }

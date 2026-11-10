@@ -1,9 +1,10 @@
 using System.Text.Json.Serialization;
 using LearnHub.Data.Enums;
+using LearnHub.Data.Interfaces;
 
 namespace LearnHub.Data.Entities;
 
-public class User
+public class User : ITrackable
 {
     public Guid Id { get; set; }
 
@@ -23,7 +24,9 @@ public class User
 
     public DateTime CreatedAt { get; set; }
 
+    public string? CreatedBy { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    public string? UpdatedBy { get; set; }
 
     public StudentProfile? StudentProfile { get; set; }
 

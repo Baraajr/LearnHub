@@ -96,6 +96,10 @@ public class AdminService(
             Email = user.Email,
             IsActive = user.IsActive,
             Role = user.Role,
+            CreatedAt = user.CreatedAt,
+            CreatedBy = user.CreatedBy,
+            UpdatedAt = user.UpdatedAt,
+            UpdatedBy = user?.UpdatedBy,
         };
     }
 }

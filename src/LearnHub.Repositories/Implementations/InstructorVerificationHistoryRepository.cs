@@ -10,7 +10,6 @@ public class InstructorVerificationHistoryRepository(LearnHubDbContext context)
 {
     public async Task AddAsync(InstructorVerificationHistory history)
     {
-        history.CreatedAt = DateTime.UtcNow;
         await context.InstructorVerificationHistories.AddAsync(history);
     }
 

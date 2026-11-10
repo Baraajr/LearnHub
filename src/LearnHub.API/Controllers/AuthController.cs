@@ -25,6 +25,8 @@ public class AuthController(
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterDto request)
     {
+        if (User.Identity?.IsAuthenticated == true)
+            throw new ForbiddenException("You are already logged in.");
         var result = await _authService.RegisterAsync(request);
 
         if (result.AccessToken is not null && result.RefreshToken is not null)
@@ -162,6 +164,10 @@ public class AuthController(
             Email = user.Email,
             Role = user.Role,
             IsActive = user.IsActive,
+            CreatedAt = user.CreatedAt,
+            CreatedBy = user.CreatedBy,
+            UpdatedAt = user.UpdatedAt,
+            UpdatedBy = user.UpdatedBy,
         };
     }
 }

@@ -101,6 +101,7 @@ public class InstructorsService(
         if (!instructor.IsActive)
             throw new ForbiddenException("Your instructor account is inactive.");
 
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
         switch (instructor.InstructorProfile.VerificationStatus)
         {
             case InstructorVerificationStatus.PENDING:
@@ -115,6 +116,7 @@ public class InstructorsService(
             default:
                 throw new ForbiddenException("Your instructor account cannot access the platform.");
         }
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
     }
 
     public async Task<List<InstructorVerificationHistoryDto>> GetVerificationHistoryAsync(
@@ -141,7 +143,6 @@ public class InstructorsService(
     private static InstructorResponseDto MapToDto(User user)
     {
         var profile = user.InstructorProfile!;
-        Console.WriteLine(profile.Reviewer);
 
         return new InstructorResponseDto
         {
@@ -149,12 +150,24 @@ public class InstructorsService(
             Name = user.Name,
             Email = user.Email,
             IsActive = user.IsActive,
+
             VerificationStatus = profile.VerificationStatus,
             ReviewedBy = profile.ReviewedBy,
             ReviewerName = profile.Reviewer?.Name,
             ReviewedAt = profile.ReviewedAt,
             RejectionReason = profile.RejectionReason,
+
+            // Profile audit
             CreatedAt = profile.CreatedAt,
+            CreatedBy = profile.CreatedBy,
+            UpdatedAt = profile.UpdatedAt,
+            UpdatedBy = profile.UpdatedBy,
+
+            // Account audit
+            AccountCreatedAt = user.CreatedAt,
+            AccountCreatedBy = user.CreatedBy,
+            AccountUpdatedAt = user.UpdatedAt,
+            AccountUpdatedBy = user.UpdatedBy,
         };
     }
 
