@@ -1,10 +1,8 @@
 using LearnHub.Data.Context;
 using LearnHub.Data.Interceptors;
-using LearnHub.Data.Options;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 
 namespace LearnHub.Data;
 
@@ -16,15 +14,8 @@ public static class DependencyInjection
     )
     {
         var connectionString =
-            "workstation id=learnhub.mssql.somee.com;packet size=4096;user id=baraajr1_SQLLogin_1;pwd=test1234;data source=learnhub.mssql.somee.com;persist security info=False;initial catalog=learnhub;TrustServerCertificate=True";
-
-        if (string.IsNullOrWhiteSpace(connectionString))
-            throw new InvalidOperationException("DB_CONNECTION_STRING is not configured.");
-
-        services.AddDbContext<LearnHubDbContext>(options =>
-            options.UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure())
-        );
-        services.AddHttpContextAccessor();
+            configuration.GetConnectionString("DefaultConnection")
+            ?? throw new InvalidOperationException("Database connection string is not configured.");
 
         services.AddSingleton(TimeProvider.System);
 
@@ -36,6 +27,7 @@ public static class DependencyInjection
                     .UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure())
                     .AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>())
         );
+
         return services;
     }
 }

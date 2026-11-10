@@ -1,20 +1,12 @@
 using System.Text.Json.Serialization;
 using LearnHub.Data.Enums;
 using LearnHub.Data.Interfaces;
+using Microsoft.AspNetCore.Identity;
 
 namespace LearnHub.Data.Entities;
 
-public class User : ITrackable
+public class User : IdentityUser<Guid>, ITrackable
 {
-    public Guid Id { get; set; }
-
-    public string Name { get; set; } = string.Empty;
-
-    public string Email { get; set; } = string.Empty;
-
-    [JsonIgnore]
-    public string PasswordHash { get; set; } = string.Empty;
-
     public UserRole Role { get; set; }
 
     public bool IsActive { get; set; } = true;
@@ -25,7 +17,9 @@ public class User : ITrackable
     public DateTime CreatedAt { get; set; }
 
     public string? CreatedBy { get; set; }
+
     public DateTime? UpdatedAt { get; set; }
+
     public string? UpdatedBy { get; set; }
 
     public StudentProfile? StudentProfile { get; set; }

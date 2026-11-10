@@ -7,6 +7,7 @@ using LearnHub.Services.Exceptions;
 using LearnHub.Services.Instructors.Interfaces;
 using LearnHub.Services.Options;
 using LearnHub.Services.Students.Interfaces;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 
 namespace LearnHub.Services.Auth;
@@ -19,7 +20,8 @@ public class AuthService(
     IStudentProfileRepository studentRepository,
     IInstructorProfileRepository instructorRepository,
     IUnitOfWork unitOfWork,
-    IOptions<JwtOptions> jwtOptions
+    IOptions<JwtOptions> jwtOptions,
+    UserManager<User> userManager
 ) : IAuthService
 {
     private readonly JwtOptions _jwtOptions = jwtOptions.Value;
@@ -31,55 +33,65 @@ public class AuthService(
 
         var email = request.Email.Trim().ToLowerInvariant();
 
-        if (await userRepository.ExistsByEmailAsync(email))
+        if (await userManager.FindByEmailAsync(email) is not null)
             throw new ConflictException("Email already exists.");
 
         return await unitOfWork.ExecuteInTransactionAsync(async () =>
         {
             var user = new User
             {
-                Name = request.Name.Trim(),
+                UserName = request.UserName.Trim(),
                 Email = email,
                 Role = request.Role,
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
             };
 
-            await userRepository.AddAsync(user);
-            await unitOfWork.SaveChangesAsync();
+            var result = await userManager.CreateAsync(user, request.Password);
+
+            if (!result.Succeeded)
+            {
+                var duplicate = result.Errors.Any(e =>
+                    e.Code is "DuplicateEmail" or "DuplicateUserName"
+                );
+
+                var errors = string.Join("; ", result.Errors.Select(e => e.Description));
+
+                if (duplicate)
+                    throw new ConflictException(errors);
+
+                throw new BadRequestException(errors);
+            }
 
             if (request.Role == UserRole.STUDENT)
             {
                 await studentRepository.AddAsync(new StudentProfile { UserId = user.Id });
-            }
-            else
-            {
-                await instructorRepository.AddAsync(
-                    new InstructorProfile
-                    {
-                        UserId = user.Id,
-                        VerificationStatus = InstructorVerificationStatus.PENDING,
-                    }
-                );
 
-                await unitOfWork.SaveChangesAsync();
-
-                // Instructor registration does not authenticate the instructor.
-                return new AuthResponseDto { AccessToken = null!, RefreshToken = null! };
+                return await GenerateAuthResponseAsync(user);
             }
 
-            return await GenerateAuthResponseAsync(user);
+            await instructorRepository.AddAsync(
+                new InstructorProfile
+                {
+                    UserId = user.Id,
+                    VerificationStatus = InstructorVerificationStatus.PENDING,
+                }
+            );
+
+            await unitOfWork.SaveChangesAsync();
+
+            return new AuthResponseDto { AccessToken = null!, RefreshToken = null! };
         });
     }
 
     public async Task<AuthResponseDto> LoginAsync(LoginDto request)
     {
         var email = request.Email.Trim().ToLowerInvariant();
-        var user = await userRepository.GetByEmailAsync(email);
+
+        var user = await userManager.FindByEmailAsync(email);
 
         if (
             user is null
             || !user.IsActive
-            || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash)
+            || !await userManager.CheckPasswordAsync(user, request.Password)
         )
         {
             throw new UnauthorizedException("Invalid email or password.");

@@ -28,6 +28,8 @@ public class UserRepository(LearnHubDbContext context) : IUserRepository
     public async Task<User?> GetByIdAsync(Guid id, UserRole? role = null)
     {
         var query = context.Users.AsQueryable();
+        if (role.HasValue)
+            query = query.Where(u => u.Role == role.Value);
 
         if (role == UserRole.INSTRUCTOR)
             query = query.Include(u => u.InstructorProfile);
@@ -42,15 +44,12 @@ public class UserRepository(LearnHubDbContext context) : IUserRepository
         await context.Users.AddAsync(user);
     }
 
-    public async Task<User?> GetByEmailAsync(string email)
-    {
-        return await context.Users.FirstOrDefaultAsync(u => u.Email == email);
-    }
-
     public async Task<bool> ExistsByEmailAsync(string email, Guid? exceptUserId = null)
     {
+        var normalizedEmail = email.Trim().ToUpperInvariant();
+
         return await context.Users.AnyAsync(u =>
-            u.Email == email && (exceptUserId == null || u.Id != exceptUserId)
+            u.NormalizedEmail == normalizedEmail && (exceptUserId == null || u.Id != exceptUserId)
         );
     }
 

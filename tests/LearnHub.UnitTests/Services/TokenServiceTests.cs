@@ -42,7 +42,7 @@ public class TokenServiceTests
         var user = new User
         {
             Id = Guid.NewGuid(),
-            Name = "Baraa",
+            UserName = "Baraa",
             Role = UserRole.STUDENT,
             TokenVersion = 2,
         };
@@ -61,7 +61,7 @@ public class TokenServiceTests
             token.Claims.First(x => x.Type == ClaimTypes.NameIdentifier).Value
         );
 
-        Assert.Equal(user.Name, token.Claims.First(x => x.Type == ClaimTypes.Name).Value);
+        Assert.Equal(user.UserName, token.Claims.First(x => x.Type == ClaimTypes.Name).Value);
 
         Assert.Equal(
             user.Role.ToString(),
@@ -192,7 +192,7 @@ public class TokenServiceTests
         var user = new User
         {
             Id = Guid.NewGuid(),
-            Name = "Baraa",
+            UserName = "Baraa",
             Role = UserRole.STUDENT,
         };
 
@@ -211,7 +211,7 @@ public class TokenServiceTests
         var user = new User
         {
             Id = Guid.NewGuid(),
-            Name = "Baraa",
+            UserName = "Baraa",
             Role = UserRole.STUDENT,
         };
 
@@ -249,7 +249,7 @@ public class TokenServiceTests
         var user = new User
         {
             Id = Guid.NewGuid(),
-            Name = "Baraa",
+            UserName = "Baraa",
             Role = UserRole.STUDENT,
         };
 
@@ -290,7 +290,7 @@ public class TokenServiceTests
         var user = new User
         {
             Id = Guid.NewGuid(),
-            Name = "Baraa",
+            UserName = "Baraa",
             Role = UserRole.STUDENT,
         };
 

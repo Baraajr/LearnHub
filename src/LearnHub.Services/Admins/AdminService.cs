@@ -35,7 +35,7 @@ public class AdminService(
 
         var admin = new User
         {
-            Name = dto.Name.Trim(),
+            UserName = dto.UserName.Trim(),
             Email = email,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
             Role = UserRole.ADMIN,
@@ -92,8 +92,8 @@ public class AdminService(
         return new AdminDto
         {
             Id = user.Id,
-            Name = user.Name,
-            Email = user.Email,
+            UserName = user.UserName ?? throw new InvalidOperationException("UserName is missing."),
+            Email = user.Email ?? throw new InvalidOperationException("Email is missing."),
             IsActive = user.IsActive,
             Role = user.Role,
             CreatedAt = user.CreatedAt,

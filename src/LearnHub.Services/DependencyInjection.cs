@@ -1,4 +1,6 @@
 using System.Text;
+using LearnHub.Data.Context;
+using LearnHub.Data.Entities;
 using LearnHub.Data.Interfaces;
 using LearnHub.Repositories;
 using LearnHub.Services.Admins;
@@ -25,7 +27,12 @@ public static class DependencyInjection
     )
     {
         services.AddRepositories(configuration);
-
+        services
+            .AddIdentityCore<User>(options =>
+            {
+                options.User.RequireUniqueEmail = true;
+            })
+            .AddEntityFrameworkStores<LearnHubDbContext>();
         // JwtOptions
         // JWT Options
         services

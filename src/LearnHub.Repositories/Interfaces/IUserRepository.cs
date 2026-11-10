@@ -7,7 +7,6 @@ public interface IUserRepository
 {
     Task<List<User>> GetAllSync(UserRole? role = null);
     Task<User?> GetByIdAsync(Guid id, UserRole? role = null);
-    Task<User?> GetByEmailAsync(string email);
     Task<bool> ExistsByEmailAsync(string email, Guid? exceptUserId = null);
 
     Task<int> CountActiveAsync(UserRole? role = null);

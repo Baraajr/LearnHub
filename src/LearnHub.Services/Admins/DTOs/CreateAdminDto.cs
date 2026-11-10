@@ -5,7 +5,7 @@ namespace LearnHub.Services.Admins.DTOs;
 public class CreateAdminDto
 {
     [Required]
-    public string Name { get; set; } = string.Empty;
+    public string UserName { get; set; } = string.Empty;
 
     [Required]
     [EmailAddress]

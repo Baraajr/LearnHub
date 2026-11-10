@@ -20,10 +20,13 @@ public class TokenService(
 
     public string GenerateAccessToken(User user)
     {
+        if (string.IsNullOrWhiteSpace(user.UserName))
+            throw new InvalidOperationException("UserName is missing.");
+
         var claims = new[]
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(ClaimTypes.Name, user.Name),
+            new Claim(ClaimTypes.Name, user.UserName),
             new Claim(ClaimTypes.Role, user.Role.ToString()),
             new Claim("tokenVersion", user.TokenVersion.ToString()),
         };

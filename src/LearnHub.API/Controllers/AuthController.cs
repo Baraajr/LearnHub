@@ -160,8 +160,8 @@ public class AuthController(
         return new UserResponseDto
         {
             Id = user.Id,
-            Name = user.Name,
-            Email = user.Email,
+            UserName = user.UserName ?? throw new InvalidOperationException("UserName is missing."),
+            Email = user.Email ?? throw new InvalidOperationException("Email is missing."),
             Role = user.Role,
             IsActive = user.IsActive,
             CreatedAt = user.CreatedAt,

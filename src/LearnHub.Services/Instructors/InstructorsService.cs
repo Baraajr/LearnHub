@@ -147,13 +147,13 @@ public class InstructorsService(
         return new InstructorResponseDto
         {
             Id = user.Id,
-            Name = user.Name,
-            Email = user.Email,
+            UserName = user.UserName ?? throw new InvalidOperationException("UserName is missing."),
+            Email = user.Email ?? throw new InvalidOperationException("Email is missing."),
             IsActive = user.IsActive,
 
             VerificationStatus = profile.VerificationStatus,
             ReviewedBy = profile.ReviewedBy,
-            ReviewerName = profile.Reviewer?.Name,
+            ReviewerName = profile.Reviewer?.UserName,
             ReviewedAt = profile.ReviewedAt,
             RejectionReason = profile.RejectionReason,
 

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Castle.Core.Logging;
 using LearnHub.Data.Entities;
 using LearnHub.Data.Enums;
 using LearnHub.Repositories.Interfaces;
@@ -9,6 +10,7 @@ using LearnHub.Services.Exceptions;
 using LearnHub.Services.Instructors.Interfaces;
 using LearnHub.Services.Options;
 using LearnHub.Services.Students.Interfaces;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using Moq;
 
@@ -28,9 +30,23 @@ public class AuthServiceTests
     private readonly Mock<IUnitOfWork> _unitOfWork = new();
 
     private readonly AuthService _sut;
+    private readonly Mock<IUserStore<User>> _userStore = new();
+    private readonly Mock<UserManager<User>> _userManager;
 
     public AuthServiceTests()
     {
+        _userManager = new Mock<UserManager<User>>(
+            _userStore.Object,
+            Options.Create(new IdentityOptions()),
+            Mock.Of<IPasswordHasher<User>>(),
+            Array.Empty<IUserValidator<User>>(),
+            Array.Empty<IPasswordValidator<User>>(),
+            new UpperInvariantLookupNormalizer(),
+            new IdentityErrorDescriber(),
+            Mock.Of<IServiceProvider>(),
+            Mock.Of<Microsoft.Extensions.Logging.ILogger<UserManager<User>>>()
+        );
+
         _sut = new AuthService(
             _tokenService.Object,
             _userRepository.Object,
@@ -48,7 +64,8 @@ public class AuthServiceTests
                     Issuer = "LearnHub",
                     Audience = "LearnHub",
                 }
-            )
+            ),
+            _userManager.Object
         );
 
         _unitOfWork
@@ -84,16 +101,18 @@ public class AuthServiceTests
         StudentProfile? createdProfile = null;
         RefreshToken? createdToken = null;
 
-        _userRepository.Setup(x => x.ExistsByEmailAsync("baraa@gmail.com")).ReturnsAsync(false);
+        _userManager.Setup(x => x.FindByEmailAsync("baraa@gmail.com")).ReturnsAsync((User?)null);
 
-        _userRepository
-            .Setup(x => x.AddAsync(It.IsAny<User>()))
-            .Callback<User>(user =>
-            {
-                user.Id = userId;
-                createdUser = user;
-            })
-            .Returns(Task.CompletedTask);
+        _userManager
+            .Setup(x => x.CreateAsync(It.IsAny<User>(), "password123"))
+            .Callback<User, string>(
+                (user, _) =>
+                {
+                    user.Id = userId;
+                    createdUser = user;
+                }
+            )
+            .ReturnsAsync(IdentityResult.Success);
 
         _studentProfileRepository
             .Setup(x => x.AddAsync(It.IsAny<StudentProfile>()))
@@ -107,7 +126,7 @@ public class AuthServiceTests
 
         var request = new RegisterDto
         {
-            Name = " Baraa ",
+            UserName = " Baraa ",
             Email = " BARAA@GMAIL.COM ",
             Password = "password123",
             Role = UserRole.STUDENT,
@@ -123,10 +142,11 @@ public class AuthServiceTests
 
         Assert.NotNull(createdUser);
         Assert.Equal(userId, createdUser.Id);
-        Assert.Equal("Baraa", createdUser.Name);
+        Assert.Equal("Baraa", createdUser.UserName);
         Assert.Equal("baraa@gmail.com", createdUser.Email);
         Assert.Equal(UserRole.STUDENT, createdUser.Role);
-        Assert.True(BCrypt.Net.BCrypt.Verify("password123", createdUser.PasswordHash));
+
+        _userManager.Verify(x => x.CreateAsync(createdUser, "password123"), Times.Once);
 
         Assert.NotNull(createdProfile);
         Assert.Equal(userId, createdProfile.UserId);
@@ -134,40 +154,41 @@ public class AuthServiceTests
         Assert.NotNull(createdToken);
         Assert.Equal(userId, createdToken.UserId);
         Assert.Equal("hashed-refresh-token", createdToken.TokenHash);
-        Assert.NotNull(createdToken);
+
         Assert.InRange(
             createdToken.ExpiresAt,
             expectedExpiry.AddSeconds(-5),
             expectedExpiry.AddSeconds(5)
         );
+
         _instructorProfileRepository.Verify(
             x => x.AddAsync(It.IsAny<InstructorProfile>()),
             Times.Never
         );
-
-        _unitOfWork.Verify(x => x.SaveChangesAsync(), Times.Exactly(2));
     }
 
     [Fact]
-    public async Task RegisterAsync_ValidInstructor_CreatesInstructorAndReturnsTokens()
+    public async Task RegisterAsync_ValidInstructor_CreatesPendingInstructorWithoutTokens()
     {
         // Arrange
         var userId = Guid.NewGuid();
         User? createdUser = null;
         InstructorProfile? createdProfile = null;
 
-        _userRepository
-            .Setup(x => x.ExistsByEmailAsync("instructor@gmail.com"))
-            .ReturnsAsync(false);
+        _userManager
+            .Setup(x => x.FindByEmailAsync("instructor@gmail.com"))
+            .ReturnsAsync((User?)null);
 
-        _userRepository
-            .Setup(x => x.AddAsync(It.IsAny<User>()))
-            .Callback<User>(user =>
-            {
-                user.Id = userId;
-                createdUser = user;
-            })
-            .Returns(Task.CompletedTask);
+        _userManager
+            .Setup(x => x.CreateAsync(It.IsAny<User>(), "password123"))
+            .Callback<User, string>(
+                (user, _) =>
+                {
+                    user.Id = userId;
+                    createdUser = user;
+                }
+            )
+            .ReturnsAsync(IdentityResult.Success);
 
         _instructorProfileRepository
             .Setup(x => x.AddAsync(It.IsAny<InstructorProfile>()))
@@ -176,7 +197,7 @@ public class AuthServiceTests
 
         var request = new RegisterDto
         {
-            Name = "Instructor",
+            UserName = "Instructor",
             Email = "instructor@gmail.com",
             Password = "password123",
             Role = UserRole.INSTRUCTOR,
@@ -187,6 +208,8 @@ public class AuthServiceTests
 
         // Assert
         Assert.NotNull(result);
+        Assert.Null(result.AccessToken);
+        Assert.Null(result.RefreshToken);
 
         Assert.NotNull(createdUser);
         Assert.Equal(UserRole.INSTRUCTOR, createdUser.Role);
@@ -196,6 +219,8 @@ public class AuthServiceTests
         Assert.Equal(InstructorVerificationStatus.PENDING, createdProfile.VerificationStatus);
 
         _studentProfileRepository.Verify(x => x.AddAsync(It.IsAny<StudentProfile>()), Times.Never);
+
+        _tokenService.Verify(x => x.CreateRefreshTokenAsync(It.IsAny<RefreshToken>()), Times.Never);
     }
 
     [Theory]
@@ -203,74 +228,65 @@ public class AuthServiceTests
     [InlineData(UserRole.SUPERADMIN)]
     public async Task RegisterAsync_RestrictedRole_ThrowsValidationException(UserRole role)
     {
-        // Arrange
         var request = new RegisterDto
         {
-            Name = "Admin",
+            UserName = "Admin",
             Email = "admin@gmail.com",
             Password = "password123",
             Role = role,
         };
 
-        // Act
         var exception = await Assert.ThrowsAsync<BadRequestException>(() =>
             _sut.RegisterAsync(request)
         );
 
-        // Assert
         Assert.Equal("Only student or instructor registration is allowed.", exception.Message);
 
-        _userRepository.Verify(x => x.AddAsync(It.IsAny<User>()), Times.Never);
+        _userManager.Verify(x => x.CreateAsync(It.IsAny<User>(), It.IsAny<string>()), Times.Never);
 
         _unitOfWork.Verify(
-            x => x.ExecuteInTransactionAsync(It.IsAny<Func<Task<bool>>>()),
+            x => x.ExecuteInTransactionAsync(It.IsAny<Func<Task<AuthResponseDto>>>()),
             Times.Never
         );
     }
 
     [Fact]
-    public async Task RegisterAsync_EmailAlreadyExists_ReturnsNull()
+    public async Task RegisterAsync_EmailAlreadyExists_ThrowsConflictException()
     {
-        // Arrange
-        _userRepository.Setup(x => x.ExistsByEmailAsync("baraa@gmail.com")).ReturnsAsync(true);
+        var existingUser = new User { Email = "baraa@gmail.com", UserName = "Baraa" };
+
+        _userManager.Setup(x => x.FindByEmailAsync("baraa@gmail.com")).ReturnsAsync(existingUser);
 
         var request = new RegisterDto
         {
-            Name = "Baraa",
+            UserName = "Baraa",
             Email = "BARAA@GMAIL.COM",
             Password = "password123",
             Role = UserRole.STUDENT,
         };
 
-        // Assert
         await Assert.ThrowsAsync<ConflictException>(() => _sut.RegisterAsync(request));
 
-        _userRepository.Verify(x => x.AddAsync(It.IsAny<User>()), Times.Never);
-
-        _unitOfWork.Verify(
-            x => x.ExecuteInTransactionAsync(It.IsAny<Func<Task<bool>>>()),
-            Times.Never
-        );
+        _userManager.Verify(x => x.CreateAsync(It.IsAny<User>(), It.IsAny<string>()), Times.Never);
     }
 
     [Fact]
     public async Task RegisterAsync_TransactionFails_ThrowsException()
     {
-        // Arrange
-        _userRepository.Setup(x => x.ExistsByEmailAsync(It.IsAny<string>())).ReturnsAsync(false);
+        _userManager.Setup(x => x.FindByEmailAsync("baraa@gmail.com")).ReturnsAsync((User?)null);
 
         _unitOfWork
             .Setup(x => x.ExecuteInTransactionAsync(It.IsAny<Func<Task<AuthResponseDto>>>()))
             .ThrowsAsync(new Exception("Database error"));
+
         var request = new RegisterDto
         {
-            Name = "Baraa",
+            UserName = "Baraa",
             Email = "baraa@gmail.com",
             Password = "password123",
             Role = UserRole.STUDENT,
         };
 
-        // Act & Assert
         var exception = await Assert.ThrowsAsync<Exception>(() => _sut.RegisterAsync(request));
 
         Assert.Equal("Database error", exception.Message);
@@ -283,16 +299,17 @@ public class AuthServiceTests
         var user = new User
         {
             Id = Guid.NewGuid(),
-            Name = "Baraa",
+            UserName = "Baraa",
             Email = "baraa@gmail.com",
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword("password123"),
             Role = UserRole.STUDENT,
             IsActive = true,
         };
 
         RefreshToken? createdToken = null;
 
-        _userRepository.Setup(x => x.GetByEmailAsync("baraa@gmail.com")).ReturnsAsync(user);
+        _userManager.Setup(x => x.FindByEmailAsync("baraa@gmail.com")).ReturnsAsync(user);
+
+        _userManager.Setup(x => x.CheckPasswordAsync(user, "password123")).ReturnsAsync(true);
 
         _tokenService
             .Setup(x => x.CreateRefreshTokenAsync(It.IsAny<RefreshToken>()))
@@ -314,71 +331,79 @@ public class AuthServiceTests
         Assert.Equal("hashed-refresh-token", createdToken.TokenHash);
 
         _tokenService.Verify(x => x.GenerateAccessToken(user), Times.Once);
-
         _unitOfWork.Verify(x => x.SaveChangesAsync(), Times.Once);
     }
 
     [Fact]
-    public async Task LoginAsync_UserDoesNotExist_ReturnsNull()
+    public async Task LoginAsync_UserDoesNotExist_ThrowsUnauthorizedException()
     {
         // Arrange
-        _userRepository
-            .Setup(x => x.GetByEmailAsync(It.IsAny<string>()))
-            .ReturnsAsync((User?)null);
+        _userManager.Setup(x => x.FindByEmailAsync(It.IsAny<string>())).ReturnsAsync((User?)null);
 
-        // Assert
+        // Act & Assert
         await Assert.ThrowsAsync<UnauthorizedException>(() =>
             _sut.LoginAsync(new LoginDto { Email = "unknown@gmail.com", Password = "password123" })
         );
 
-        _tokenService.Verify(x => x.GenerateRefreshToken(), Times.Never);
+        _userManager.Verify(
+            x => x.CheckPasswordAsync(It.IsAny<User>(), It.IsAny<string>()),
+            Times.Never
+        );
 
+        _tokenService.Verify(x => x.GenerateRefreshToken(), Times.Never);
         _unitOfWork.Verify(x => x.SaveChangesAsync(), Times.Never);
     }
 
     [Fact]
-    public async Task LoginAsync_IncorrectPassword_ReturnsNull()
+    public async Task LoginAsync_IncorrectPassword_ThrowsUnauthorizedException()
     {
         // Arrange
         var user = new User
         {
             Id = Guid.NewGuid(),
+            UserName = "Baraa",
             Email = "baraa@gmail.com",
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword("correct-password"),
             IsActive = true,
         };
 
-        _userRepository.Setup(x => x.GetByEmailAsync("baraa@gmail.com")).ReturnsAsync(user);
+        _userManager.Setup(x => x.FindByEmailAsync("baraa@gmail.com")).ReturnsAsync(user);
 
+        _userManager.Setup(x => x.CheckPasswordAsync(user, "wrong-password")).ReturnsAsync(false);
+
+        // Act & Assert
         await Assert.ThrowsAsync<UnauthorizedException>(() =>
-            _sut.LoginAsync(new LoginDto { Email = "unknown@gmail.com", Password = "password123" })
+            _sut.LoginAsync(new LoginDto { Email = "baraa@gmail.com", Password = "wrong-password" })
         );
 
         _tokenService.Verify(x => x.GenerateRefreshToken(), Times.Never);
-
         _unitOfWork.Verify(x => x.SaveChangesAsync(), Times.Never);
     }
 
     [Fact]
-    public async Task LoginAsync_InactiveUser_ReturnsNull()
+    public async Task LoginAsync_InactiveUser_ThrowsUnauthorizedException()
     {
         // Arrange
         var user = new User
         {
             Id = Guid.NewGuid(),
+            UserName = "Baraa",
             Email = "baraa@gmail.com",
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword("password123"),
             IsActive = false,
         };
 
-        _userRepository.Setup(x => x.GetByEmailAsync("baraa@gmail.com")).ReturnsAsync(user);
+        _userManager.Setup(x => x.FindByEmailAsync("baraa@gmail.com")).ReturnsAsync(user);
 
+        // Act & Assert
         await Assert.ThrowsAsync<UnauthorizedException>(() =>
-            _sut.LoginAsync(new LoginDto { Email = "unknown@gmail.com", Password = "password123" })
+            _sut.LoginAsync(new LoginDto { Email = "baraa@gmail.com", Password = "password123" })
+        );
+
+        _userManager.Verify(
+            x => x.CheckPasswordAsync(It.IsAny<User>(), It.IsAny<string>()),
+            Times.Never
         );
 
         _tokenService.Verify(x => x.GenerateRefreshToken(), Times.Never);
-
         _unitOfWork.Verify(x => x.SaveChangesAsync(), Times.Never);
     }
 
@@ -388,12 +413,16 @@ public class AuthServiceTests
         // Arrange
         var user = new User
         {
+            Id = Guid.NewGuid(),
+            UserName = "Baraa",
             Email = "baraa@gmail.com",
             IsActive = true,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword("password123"),
+            Role = UserRole.STUDENT,
         };
 
-        _userRepository.Setup(x => x.GetByEmailAsync("baraa@gmail.com")).ReturnsAsync(user);
+        _userManager.Setup(x => x.FindByEmailAsync("baraa@gmail.com")).ReturnsAsync(user);
+
+        _userManager.Setup(x => x.CheckPasswordAsync(user, "password123")).ReturnsAsync(true);
 
         // Act
         await _sut.LoginAsync(
@@ -401,7 +430,7 @@ public class AuthServiceTests
         );
 
         // Assert
-        _userRepository.Verify(x => x.GetByEmailAsync("baraa@gmail.com"), Times.Once);
+        _userManager.Verify(x => x.FindByEmailAsync("baraa@gmail.com"), Times.Once);
     }
 
     [Fact]
@@ -411,12 +440,15 @@ public class AuthServiceTests
         var user = new User
         {
             Id = Guid.NewGuid(),
+            UserName = "Baraa",
             Email = "baraa@gmail.com",
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword("password123"),
             IsActive = true,
+            Role = UserRole.STUDENT,
         };
 
-        _userRepository.Setup(x => x.GetByEmailAsync("baraa@gmail.com")).ReturnsAsync(user);
+        _userManager.Setup(x => x.FindByEmailAsync("baraa@gmail.com")).ReturnsAsync(user);
+
+        _userManager.Setup(x => x.CheckPasswordAsync(user, "password123")).ReturnsAsync(true);
 
         _unitOfWork.Setup(x => x.SaveChangesAsync()).ThrowsAsync(new Exception("Database error"));
 
@@ -442,7 +474,7 @@ public class AuthServiceTests
         var user = new User
         {
             Id = userId,
-            Name = "Baraa",
+            UserName = "Baraa",
             IsActive = true,
         };
 

@@ -53,8 +53,8 @@ public class StudentsService(IUsersService usersService) : IStudentsService
         return new StudentResponseDto
         {
             Id = user.Id,
-            Name = user.Name,
-            Email = user.Email,
+            UserName = user.UserName ?? throw new InvalidOperationException("UserName is missing."),
+            Email = user.Email ?? throw new InvalidOperationException("Email is missing."),
             IsActive = user.IsActive,
 
             // Student profile audit

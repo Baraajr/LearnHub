@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
+using LearnHub.Data.Enums;
+using LearnHub.Services.Auth.DTOs;
 
 namespace LearnHub.IntegrationTests;
 
@@ -25,14 +27,18 @@ public class AuthControllerTests : IClassFixture<CustomWebApplicationFactory>
         );
     }
 
-    private static object RegisterRequest(string? email = null) =>
-        new
+    private static RegisterDto RegisterRequest(string? email = null)
+    {
+        var id = Guid.NewGuid().ToString("N");
+
+        return new RegisterDto
         {
-            name = "Test Student",
-            email = email ?? $"student_{Guid.NewGuid():N}@test.com",
-            password = "Password123!",
-            role = "STUDENT",
+            UserName = $"TestStudent_{id}",
+            Email = email ?? $"student_{id}@test.com",
+            Password = "Password123!",
+            Role = UserRole.STUDENT,
         };
+    }
 
     private async Task RegisterUser()
     {
@@ -66,13 +72,18 @@ public class AuthControllerTests : IClassFixture<CustomWebApplicationFactory>
     [Fact]
     public async Task Register_DuplicateEmail_ReturnsConflict()
     {
+        using var firstClient = CreateIsolatedClient();
+        using var secondClient = CreateIsolatedClient();
+
         var request = RegisterRequest();
 
-        await _client.PostAsJsonAsync("/api/auth/register", request);
+        var firstResponse = await firstClient.PostAsJsonAsync("/api/auth/register", request);
 
-        var response = await _client.PostAsJsonAsync("/api/auth/register", request);
+        Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
 
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var secondResponse = await secondClient.PostAsJsonAsync("/api/auth/register", request);
+
+        Assert.Equal(HttpStatusCode.Conflict, secondResponse.StatusCode);
     }
 
     [Fact]
@@ -104,7 +115,7 @@ public class AuthControllerTests : IClassFixture<CustomWebApplicationFactory>
             "/api/auth/login",
             new
             {
-                email = request.GetType().GetProperty("email")!.GetValue(request),
+                email = request.GetType().GetProperty("Email")!.GetValue(request),
                 password = "Password123!",
             }
         );
@@ -211,8 +222,14 @@ public class AuthControllerTests : IClassFixture<CustomWebApplicationFactory>
     [Fact]
     public async Task Me_AuthenticatedUser_ReturnsUser()
     {
-        await RegisterUser();
+        var request = RegisterRequest();
 
+        // Register
+        var registerResponse = await _client.PostAsJsonAsync("/api/auth/register", request);
+
+        Assert.Equal(HttpStatusCode.OK, registerResponse.StatusCode);
+
+        // Get current user
         var response = await _client.GetAsync("/api/auth/me");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -220,7 +237,7 @@ public class AuthControllerTests : IClassFixture<CustomWebApplicationFactory>
         var user = await response.Content.ReadFromJsonAsync<UserResponse>();
 
         Assert.NotNull(user);
-        Assert.Equal("Test Student", user.Name);
+        Assert.Equal(request.UserName, user.UserName);
         Assert.Equal("STUDENT", user.Role);
         Assert.True(user.IsActive);
     }
@@ -237,7 +254,7 @@ public class AuthControllerTests : IClassFixture<CustomWebApplicationFactory>
 
     private class UserResponse
     {
-        public string Name { get; set; } = "";
+        public string UserName { get; set; } = "";
         public string Role { get; set; } = "";
         public bool IsActive { get; set; }
     }
