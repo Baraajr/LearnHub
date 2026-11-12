@@ -1,8 +1,11 @@
 using LearnHub.Data.Entities;
 using LearnHub.Data.Enums;
-using LearnHub.Repositories.Interfaces;
+using LearnHub.Repositories.InstructorProfiles;
+using LearnHub.Repositories.StudentProfiles;
+using LearnHub.Repositories.UnitOfWorkRepo;
+using LearnHub.Repositories.Users;
 using LearnHub.Services.Exceptions;
-using LearnHub.Services.Users.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace LearnHub.Services.Users;
 
@@ -15,25 +18,37 @@ public class UsersService(
 {
     public async Task<List<User>> GetAllAsync(UserRole? role = null)
     {
-        return await userRepo.GetAllSync(role);
+        var query = userRepo.GetAllAsync();
+
+        if (role.HasValue)
+            query = query.Where(u => u.Role == role.Value);
+
+        return await query.ToListAsync();
     }
 
     public async Task<User> GetUserByIdAsync(Guid userId, UserRole? role = null)
     {
-        var user = await GetUserOrThrow(userId, role);
+        var user = await userRepo.GetByIdAsync(userId);
+
+        if (user is null || (role.HasValue && user.Role != role.Value))
+            throw new NotFoundException("User not found.");
+
         return user;
     }
 
     public async Task<User> SetActiveStatusAsync(Guid userId, bool isActive)
     {
-        var user = await GetUserOrThrow(userId);
+        var user =
+            await userRepo.GetByIdAsync(userId) ?? throw new NotFoundException("User not found.");
 
         if (user.IsActive == isActive)
             return user;
 
         if (user.Role == UserRole.ADMIN && user.IsActive && !isActive)
         {
-            var activeAdmins = await userRepo.CountActiveAsync(UserRole.ADMIN);
+            var activeAdmins = await userRepo
+                .GetAllAsync()
+                .CountAsync(u => u.Role == UserRole.ADMIN && u.IsActive);
 
             if (activeAdmins <= 1)
                 throw new ConflictException("Cannot deactivate the last active administrator.");
@@ -42,23 +57,27 @@ public class UsersService(
         user.IsActive = isActive;
         user.TokenVersion++;
 
-        userRepo.Update(user);
+        await userRepo.UpdateAsync(user);
         await unitOfWork.SaveChangesAsync();
+
         return user;
     }
 
     public async Task UpdateRoleAsync(Guid adminId, Guid userId, UserRole newRole)
     {
-        // 1. Guard Clauses & Input Validation
         if (adminId == userId)
             throw new BadRequestException("You cannot change your own role.");
 
         if (!Enum.IsDefined(typeof(UserRole), newRole) || newRole == UserRole.SUPERADMIN)
+        {
             throw new BadRequestException("Invalid or unauthorized target role.");
+        }
 
         await unitOfWork.ExecuteInTransactionAsync(async () =>
         {
-            var user = await GetUserOrThrow(userId);
+            var user =
+                await userRepo.GetByIdAsync(userId)
+                ?? throw new NotFoundException("User not found.");
 
             if (user.Role == UserRole.SUPERADMIN)
                 throw new BadRequestException("Superadmin role cannot be changed.");
@@ -66,20 +85,15 @@ public class UsersService(
             if (user.Role == newRole)
                 return true;
 
-            // 2. Business Rule: Protect the last active admin
             await EnsureNotLastActiveAdminAsync(user.Role, user.IsActive);
 
-            // 3. Handle Profile Transitions (Cleanup old profile)
             await CleanupOldProfileAsync(userId, user.Role);
-
-            // 4. Handle Profile Transitions (Initialize new profile)
             await InitializeNewProfileAsync(userId, newRole);
 
-            // 5. Update User State
             user.Role = newRole;
             user.TokenVersion++;
 
-            userRepo.Update(user);
+            await userRepo.UpdateAsync(user);
             await unitOfWork.SaveChangesAsync();
 
             return true;
@@ -90,13 +104,14 @@ public class UsersService(
     {
         if (currentRole == UserRole.ADMIN && isActive)
         {
-            var activeAdmins = await userRepo.CountActiveAsync(UserRole.ADMIN);
+            var activeAdmins = await userRepo
+                .GetAllAsync()
+                .CountAsync(u => u.Role == UserRole.ADMIN && u.IsActive);
+
             if (activeAdmins <= 1)
-            {
                 throw new ConflictException(
                     "Cannot change the role of the last active administrator."
                 );
-            }
         }
     }
 
@@ -105,15 +120,19 @@ public class UsersService(
         switch (currentRole)
         {
             case UserRole.STUDENT:
-                var studentProfile = await studentRepo.GetByUserIdAsync(userId);
-                if (studentProfile != null)
+                var studentProfile = await studentRepo.GetByIdAsync(userId);
+
+                if (studentProfile is not null)
                     await studentRepo.DeleteAsync(studentProfile);
+
                 break;
 
             case UserRole.INSTRUCTOR:
-                var instructorProfile = await instructorRepo.GetByUserIdAsync(userId);
-                if (instructorProfile != null)
+                var instructorProfile = await instructorRepo.GetByIdAsync(userId);
+
+                if (instructorProfile is not null)
                     await instructorRepo.DeleteAsync(instructorProfile);
+
                 break;
         }
     }
@@ -126,9 +145,9 @@ public class UsersService(
         }
         else if (newRole == UserRole.INSTRUCTOR)
         {
-            var instructorProfile = await instructorRepo.GetByUserIdAsync(userId);
+            var instructorProfile = await instructorRepo.GetByIdAsync(userId);
 
-            if (instructorProfile == null)
+            if (instructorProfile is null)
             {
                 await instructorRepo.AddAsync(
                     new InstructorProfile
@@ -140,8 +159,8 @@ public class UsersService(
             }
             else
             {
-                // Reset verification state if they are re-entering instructor role
                 instructorProfile.VerificationStatus = InstructorVerificationStatus.PENDING;
+
                 instructorProfile.ReviewedBy = null;
                 instructorProfile.ReviewedAt = null;
                 instructorProfile.RejectionReason = null;
@@ -153,12 +172,11 @@ public class UsersService(
 
     public async Task<bool> ExistsAsync(Guid userId, UserRole? role = null)
     {
-        return await userRepo.ExistsAsync(userId, role);
-    }
+        var query = userRepo.GetAllAsync().Where(u => u.Id == userId);
 
-    private async Task<User> GetUserOrThrow(Guid userId, UserRole? role = null)
-    {
-        return await userRepo.GetByIdAsync(userId, role)
-            ?? throw new NotFoundException("User not found.");
+        if (role.HasValue)
+            query = query.Where(u => u.Role == role.Value);
+
+        return await query.AnyAsync();
     }
 }

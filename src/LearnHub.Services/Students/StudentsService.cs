@@ -1,78 +1,96 @@
 using LearnHub.Data.Entities;
 using LearnHub.Data.Enums;
+using LearnHub.Repositories.StudentProfiles;
+using LearnHub.Repositories.Users;
 using LearnHub.Services.Exceptions;
 using LearnHub.Services.Students.DTOs;
-using LearnHub.Services.Students.Interfaces;
-using LearnHub.Services.Users.Interfaces;
+using LearnHub.Services.Users;
+using Microsoft.EntityFrameworkCore;
 
 namespace LearnHub.Services.Students;
 
-public class StudentsService(IUsersService usersService) : IStudentsService
+public class StudentsService(
+    IUserRepository userRepo,
+    IStudentProfileRepository studentRepo,
+    IUsersService usersService
+) : IStudentsService
 {
     public async Task<List<StudentResponseDto>> GetAllAsync()
     {
-        var students = await usersService.GetAllAsync(UserRole.STUDENT);
-
-        return students.Select(MapToDto).ToList();
+        return await GetStudentQuery().ToListAsync();
     }
 
     public async Task<StudentResponseDto> GetStudentByIdAsync(Guid userId)
     {
-        var student = await GetStudentOrThrow(userId);
+        var student = await GetStudentQuery().FirstOrDefaultAsync(s => s.Id == userId);
 
-        return MapToDto(student);
+        return student ?? throw new NotFoundException("Student not found.");
     }
 
     public async Task<User> UpdateRoleAsync(Guid adminId, Guid userId, ChangeRoleDto dto)
     {
+        var student = await userRepo.GetByIdAsync(userId);
+
+        if (student is null || student.Role != UserRole.STUDENT)
+            throw new NotFoundException("Student not found.");
+
         await usersService.UpdateRoleAsync(adminId, userId, dto.Role);
 
-        return await usersService.GetUserByIdAsync(userId);
+        return await userRepo.GetByIdAsync(userId)
+            ?? throw new NotFoundException("User not found.");
     }
 
     public async Task<User> SetActiveStatus(Guid userId, bool isActive)
     {
-        await GetStudentOrThrow(userId);
-        var user = await usersService.SetActiveStatusAsync(userId, isActive);
+        var student = await userRepo.GetByIdAsync(userId);
 
-        return user;
+        if (student is null || student.Role != UserRole.STUDENT)
+            throw new NotFoundException("Student not found.");
+
+        return await usersService.SetActiveStatusAsync(userId, isActive);
     }
 
     public async Task EnsureCanLoginAsync(Guid userId)
     {
-        var student = await GetStudentOrThrow(userId);
+        var student = await userRepo.GetByIdAsync(userId);
+
+        if (student is null || student.Role != UserRole.STUDENT)
+            throw new NotFoundException("Student not found.");
 
         if (!student.IsActive)
             throw new ForbiddenException("Your student account is inactive.");
     }
 
-    private static StudentResponseDto MapToDto(User user)
+    private IQueryable<StudentResponseDto> GetStudentQuery()
     {
-        var profile = user.StudentProfile!;
+        var users = userRepo.GetAllAsync();
+        var profiles = studentRepo.GetAllAsync();
 
-        return new StudentResponseDto
-        {
-            Id = user.Id,
-            UserName = user.UserName ?? throw new InvalidOperationException("UserName is missing."),
-            Email = user.Email ?? throw new InvalidOperationException("Email is missing."),
-            IsActive = user.IsActive,
+        var query =
+            from profile in profiles
+            join user in users on profile.UserId equals user.Id
+            where user.Role == UserRole.STUDENT
+            select new StudentResponseDto
+            {
+                // Account
+                Id = user.Id,
+                UserName = user.UserName!,
+                Email = user.Email!,
+                IsActive = user.IsActive,
 
-            // Student profile audit
-            CreatedAt = profile.CreatedAt,
-            CreatedBy = profile.CreatedBy,
-            UpdatedAt = profile.UpdatedAt,
-            UpdatedBy = profile.UpdatedBy,
+                // Profile audit
+                CreatedAt = profile.CreatedAt,
+                CreatedBy = profile.CreatedBy,
+                UpdatedAt = profile.UpdatedAt,
+                UpdatedBy = profile.UpdatedBy,
 
-            // User account audit
-            AccountCreatedAt = user.CreatedAt,
-            AccountCreatedBy = user.CreatedBy,
-            AccountUpdatedAt = user.UpdatedAt,
-            AccountUpdatedBy = user.UpdatedBy,
-        };
-    }
+                // Account audit
+                AccountCreatedAt = user.CreatedAt,
+                AccountCreatedBy = user.CreatedBy,
+                AccountUpdatedAt = user.UpdatedAt,
+                AccountUpdatedBy = user.UpdatedBy,
+            };
 
-    private async Task<User> GetStudentOrThrow(Guid id)
-    {
-        return await usersService.GetUserByIdAsync(id, UserRole.STUDENT);
+        return query;
     }
 }

@@ -3,13 +3,14 @@ using System.Security.Claims;
 using System.Text;
 using LearnHub.Data.Entities;
 using LearnHub.Data.Enums;
-using LearnHub.Repositories.Interfaces;
-using LearnHub.Services.Auth;
+using LearnHub.Repositories.RefreshTokens;
 using LearnHub.Services.Options;
+using LearnHub.Services.Tokens;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using MockQueryable;
+using MockQueryable.Moq;
 using Moq;
-using Xunit;
 
 namespace LearnHub.UnitTests.Services.Auth;
 
@@ -126,63 +127,74 @@ public class TokenServiceTests
     [Fact]
     public async Task GetRefreshTokenAsync_ExistingToken_ReturnsToken()
     {
-        // Arrange
         var refreshToken = new RefreshToken { Id = Guid.NewGuid(), TokenHash = "hashed-token" };
 
-        _refreshTokenRepository
-            .Setup(x => x.GetByTokenHashAsync("hashed-token"))
-            .ReturnsAsync(refreshToken);
+        var mockTokens = new[] { refreshToken }.BuildMock();
 
-        // Act
+        _refreshTokenRepository.Setup(x => x.GetAllAsync()).Returns(mockTokens);
         var result = await _sut.GetRefreshTokenAsync("hashed-token");
 
-        // Assert
         Assert.Same(refreshToken, result);
     }
 
     [Fact]
     public async Task RevokeRefreshTokenAsync_ValidToken_SetsRevokedAtAndUpdatesRepository()
     {
-        // Arrange
         var refreshToken = new RefreshToken { Id = Guid.NewGuid() };
 
-        // Act
         await _sut.RevokeRefreshTokenAsync(refreshToken);
 
-        // Assert
         Assert.NotNull(refreshToken.RevokedAt);
 
-        _refreshTokenRepository.Verify(x => x.Update(refreshToken), Times.Once);
+        _refreshTokenRepository.Verify(x => x.UpdateAsync(refreshToken), Times.Once);
     }
 
     [Fact]
-    public async Task TryRevokeRefreshTokenAsync_ValidId_ReturnsRepositoryResult()
+    public async Task TryRevokeRefreshTokenAsync_ValidToken_ReturnsTrue()
     {
-        // Arrange
-        var tokenId = Guid.NewGuid();
+        var refreshToken = new RefreshToken
+        {
+            Id = Guid.NewGuid(),
+            ExpiresAt = DateTime.UtcNow.AddDays(1),
+        };
 
-        _refreshTokenRepository.Setup(x => x.TryRevokeAsync(tokenId)).ReturnsAsync(true);
+        _refreshTokenRepository
+            .Setup(x => x.GetByIdAsync(refreshToken.Id))
+            .ReturnsAsync(refreshToken);
 
-        // Act
-        var result = await _sut.TryRevokeRefreshTokenAsync(tokenId);
+        var result = await _sut.TryRevokeRefreshTokenAsync(refreshToken.Id);
 
-        // Assert
         Assert.True(result);
+        Assert.NotNull(refreshToken.RevokedAt);
 
-        _refreshTokenRepository.Verify(x => x.TryRevokeAsync(tokenId), Times.Once);
+        _refreshTokenRepository.Verify(x => x.UpdateAsync(refreshToken), Times.Once);
     }
 
     [Fact]
-    public async Task RevokeAllRefreshTokensAsync_ValidUserId_CallsRepository()
+    public async Task RevokeAllRefreshTokensAsync_ValidUserId_RevokesAllActiveTokens()
     {
-        // Arrange
         var userId = Guid.NewGuid();
 
-        // Act
+        var tokens = new[]
+        {
+            new RefreshToken { Id = Guid.NewGuid(), UserId = userId },
+            new RefreshToken { Id = Guid.NewGuid(), UserId = userId },
+            new RefreshToken { Id = Guid.NewGuid(), UserId = Guid.NewGuid() },
+        };
+
+        var mockTokens = tokens.BuildMock();
+
+        _refreshTokenRepository.Setup(x => x.GetAllAsync()).Returns(mockTokens);
+
         await _sut.RevokeAllRefreshTokensAsync(userId);
 
-        // Assert
-        _refreshTokenRepository.Verify(x => x.RevokeAllByUserIdAsync(userId), Times.Once);
+        Assert.All(tokens.Take(2), token => Assert.NotNull(token.RevokedAt));
+        Assert.Null(tokens[2].RevokedAt);
+
+        _refreshTokenRepository.Verify(
+            x => x.UpdateAsync(It.IsAny<RefreshToken>()),
+            Times.Exactly(2)
+        );
     }
 
     [Fact]

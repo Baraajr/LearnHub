@@ -1,10 +1,9 @@
 using LearnHub.Data.Entities;
 
-namespace LearnHub.Repositories.Interfaces;
+namespace LearnHub.Repositories.InstructorVerificationHistories;
 
 public interface IInstructorVerificationHistoryRepository
 {
-    Task<List<InstructorVerificationHistory>> GetByInstructorIdAsync(Guid instructorId);
-
     Task AddAsync(InstructorVerificationHistory history);
+    IQueryable<InstructorVerificationHistory> GetAllAsync();
 }

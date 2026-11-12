@@ -1,7 +1,7 @@
 using LearnHub.Data.Entities;
 using LearnHub.Data.Enums;
 
-namespace LearnHub.Services.Users.Interfaces;
+namespace LearnHub.Services.Users;
 
 public interface IUsersService
 {

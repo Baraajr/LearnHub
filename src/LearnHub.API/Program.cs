@@ -2,7 +2,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Serialization;
 using LearnHub.API.Middlewares;
-using LearnHub.Repositories.Interfaces;
+using LearnHub.Repositories.Users;
 using LearnHub.Services;
 using LearnHub.Services.Options;
 using Microsoft.AspNetCore.Authentication.JwtBearer;

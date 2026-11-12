@@ -1,7 +1,7 @@
 using LearnHub.Data.Entities;
 using LearnHub.Services.Students.DTOs;
 
-namespace LearnHub.Services.Students.Interfaces;
+namespace LearnHub.Services.Students;
 
 public interface IStudentsService
 {

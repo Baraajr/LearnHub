@@ -2,14 +2,17 @@ using System.ComponentModel.DataAnnotations;
 using Castle.Core.Logging;
 using LearnHub.Data.Entities;
 using LearnHub.Data.Enums;
-using LearnHub.Repositories.Interfaces;
+using LearnHub.Repositories.InstructorProfiles;
+using LearnHub.Repositories.StudentProfiles;
+using LearnHub.Repositories.UnitOfWorkRepo;
+using LearnHub.Repositories.Users;
 using LearnHub.Services.Auth;
 using LearnHub.Services.Auth.DTOs;
-using LearnHub.Services.Auth.Interfaces;
 using LearnHub.Services.Exceptions;
-using LearnHub.Services.Instructors.Interfaces;
+using LearnHub.Services.Instructors;
 using LearnHub.Services.Options;
-using LearnHub.Services.Students.Interfaces;
+using LearnHub.Services.Students;
+using LearnHub.Services.Tokens;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -529,10 +532,7 @@ public class AuthServiceTests
 
         await Assert.ThrowsAsync<UnauthorizedException>(() => _sut.RefreshAsync("invalid-token"));
 
-        _userRepository.Verify(
-            x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<UserRole?>()),
-            Times.Never
-        );
+        _userRepository.Verify(x => x.GetByIdAsync(It.IsAny<Guid>()), Times.Never);
 
         _unitOfWork.Verify(
             x => x.ExecuteInTransactionAsync(It.IsAny<Func<Task<AuthResponseDto?>>>()),
@@ -556,10 +556,7 @@ public class AuthServiceTests
 
         await Assert.ThrowsAsync<UnauthorizedException>(() => _sut.RefreshAsync("old-token"));
 
-        _userRepository.Verify(
-            x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<UserRole?>()),
-            Times.Never
-        );
+        _userRepository.Verify(x => x.GetByIdAsync(It.IsAny<Guid>()), Times.Never);
     }
 
     [Fact]
@@ -577,10 +574,7 @@ public class AuthServiceTests
 
         await Assert.ThrowsAsync<UnauthorizedException>(() => _sut.RefreshAsync("expired-token"));
 
-        _userRepository.Verify(
-            x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<UserRole?>()),
-            Times.Never
-        );
+        _userRepository.Verify(x => x.GetByIdAsync(It.IsAny<Guid>()), Times.Never);
     }
 
     [Fact]

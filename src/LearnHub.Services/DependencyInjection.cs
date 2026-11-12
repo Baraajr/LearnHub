@@ -4,16 +4,12 @@ using LearnHub.Data.Entities;
 using LearnHub.Data.Interfaces;
 using LearnHub.Repositories;
 using LearnHub.Services.Admins;
-using LearnHub.Services.Admins.Interfaces;
 using LearnHub.Services.Auth;
-using LearnHub.Services.Auth.Interfaces;
 using LearnHub.Services.Instructors;
-using LearnHub.Services.Instructors.Interfaces;
 using LearnHub.Services.Options;
 using LearnHub.Services.Students;
-using LearnHub.Services.Students.Interfaces;
+using LearnHub.Services.Tokens;
 using LearnHub.Services.Users;
-using LearnHub.Services.Users.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 

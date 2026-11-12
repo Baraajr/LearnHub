@@ -1,6 +1,6 @@
 using LearnHub.Data.Entities;
 
-namespace LearnHub.Services.Auth.Interfaces;
+namespace LearnHub.Services.Tokens;
 
 public interface ITokenService
 {

@@ -1,22 +1,21 @@
 using LearnHub.Data.Entities;
 using LearnHub.Data.Enums;
-using LearnHub.Repositories.Interfaces;
+using LearnHub.Repositories.UnitOfWorkRepo;
+using LearnHub.Repositories.Users;
 using LearnHub.Services.Admins.DTOs;
-using LearnHub.Services.Admins.Interfaces;
 using LearnHub.Services.Exceptions;
-using LearnHub.Services.Users.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace LearnHub.Services.Admins;
 
-public class AdminService(
-    IUserRepository userRepository,
-    IUsersService usersService,
-    IUnitOfWork unitOfWork
-) : IAdminService
+public class AdminService(IUserRepository userRepository, IUnitOfWork unitOfWork) : IAdminService
 {
     public async Task<IReadOnlyList<AdminDto>> GetAllAsync()
     {
-        var admins = await usersService.GetAllAsync(UserRole.ADMIN);
+        var admins = await userRepository
+            .GetAllAsync()
+            .Where(u => u.Role == UserRole.ADMIN)
+            .ToListAsync();
 
         return admins.Select(MapToDto).ToList();
     }
@@ -30,7 +29,9 @@ public class AdminService(
     {
         var email = dto.Email.Trim().ToLowerInvariant();
 
-        if (await userRepository.ExistsByEmailAsync(email))
+        var emailExists = await userRepository.GetAllAsync().AnyAsync(u => u.Email == email);
+
+        if (emailExists)
             throw new ConflictException("Email already exists.");
 
         var admin = new User
@@ -55,7 +56,9 @@ public class AdminService(
         if (!admin.IsActive)
             return;
 
-        var activeAdmins = await userRepository.CountActiveAsync(UserRole.ADMIN);
+        var activeAdmins = await userRepository
+            .GetAllAsync()
+            .CountAsync(u => u.Role == UserRole.ADMIN && u.IsActive);
 
         if (activeAdmins <= 1)
             throw new ConflictException("Cannot deactivate the last active administrator.");
@@ -99,7 +102,7 @@ public class AdminService(
             CreatedAt = user.CreatedAt,
             CreatedBy = user.CreatedBy,
             UpdatedAt = user.UpdatedAt,
-            UpdatedBy = user?.UpdatedBy,
+            UpdatedBy = user.UpdatedBy,
         };
     }
 }

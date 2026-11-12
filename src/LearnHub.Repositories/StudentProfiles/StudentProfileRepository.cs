@@ -1,27 +1,30 @@
 using LearnHub.Data.Context;
 using LearnHub.Data.Entities;
-using LearnHub.Repositories.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
-namespace LearnHub.Repositories.Implementations;
+namespace LearnHub.Repositories.StudentProfiles;
 
 public class StudentProfileRepository(LearnHubDbContext context) : IStudentProfileRepository
 {
-    public async Task<StudentProfile?> GetByUserIdAsync(Guid userId)
+    public IQueryable<StudentProfile> GetAllAsync()
     {
-        return await context
-            .StudentProfiles.Include(s => s.User)
-            .FirstOrDefaultAsync(s => s.UserId == userId);
+        return context.StudentProfiles.AsNoTracking();
     }
 
-    public async Task<bool> ExistsAsync(Guid userId)
+    public async Task<StudentProfile?> GetByIdAsync(Guid id)
     {
-        return await context.StudentProfiles.AnyAsync(s => s.UserId == userId);
+        return await context.StudentProfiles.FindAsync(id);
     }
 
     public async Task AddAsync(StudentProfile profile)
     {
         await context.StudentProfiles.AddAsync(profile);
+    }
+
+    public Task UpdateAsync(StudentProfile profile)
+    {
+        context.StudentProfiles.Update(profile);
+        return Task.CompletedTask;
     }
 
     public Task DeleteAsync(StudentProfile profile)

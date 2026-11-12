@@ -1,4 +1,4 @@
-namespace LearnHub.Repositories.Interfaces;
+namespace LearnHub.Repositories.UnitOfWorkRepo;
 
 public interface IUnitOfWork
 {

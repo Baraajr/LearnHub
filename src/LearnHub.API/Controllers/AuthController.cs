@@ -1,7 +1,7 @@
 using System.Security.Claims;
 using LearnHub.Data.Entities;
+using LearnHub.Services.Auth;
 using LearnHub.Services.Auth.DTOs;
-using LearnHub.Services.Auth.Interfaces;
 using LearnHub.Services.Exceptions;
 using LearnHub.Services.Options; // Ensure this points to your options namespace
 using Microsoft.AspNetCore.Authorization;

@@ -1,7 +1,7 @@
 using System.Security.Claims;
 using LearnHub.Data.Enums;
+using LearnHub.Services.Instructors;
 using LearnHub.Services.Instructors.DTOs;
-using LearnHub.Services.Instructors.Interfaces;
 using LearnHub.Services.Students.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

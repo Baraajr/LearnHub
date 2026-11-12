@@ -1,7 +1,7 @@
 using LearnHub.Data.Entities;
 using LearnHub.Services.Admins.DTOs;
 
-namespace LearnHub.Services.Admins.Interfaces;
+namespace LearnHub.Services.Admins;
 
 public interface IAdminService
 {

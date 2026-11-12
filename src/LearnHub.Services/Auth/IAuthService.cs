@@ -1,6 +1,6 @@
 using LearnHub.Services.Auth.DTOs;
 
-namespace LearnHub.Services.Auth.Interfaces;
+namespace LearnHub.Services.Auth;
 
 public interface IAuthService
 {

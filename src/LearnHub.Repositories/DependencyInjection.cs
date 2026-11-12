@@ -1,6 +1,10 @@
 using LearnHub.Data;
-using LearnHub.Repositories.Implementations;
-using LearnHub.Repositories.Interfaces;
+using LearnHub.Repositories.InstructorProfiles;
+using LearnHub.Repositories.InstructorVerificationHistories;
+using LearnHub.Repositories.RefreshTokens;
+using LearnHub.Repositories.StudentProfiles;
+using LearnHub.Repositories.UnitOfWorkRepo;
+using LearnHub.Repositories.Users;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 

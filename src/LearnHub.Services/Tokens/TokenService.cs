@@ -3,13 +3,13 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using LearnHub.Data.Entities;
-using LearnHub.Repositories.Interfaces;
-using LearnHub.Services.Auth.Interfaces;
+using LearnHub.Repositories.RefreshTokens;
 using LearnHub.Services.Options;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
-namespace LearnHub.Services.Auth;
+namespace LearnHub.Services.Tokens;
 
 public class TokenService(
     IOptions<JwtOptions> options,
@@ -38,7 +38,7 @@ public class TokenService(
             issuer: _options.Issuer,
             audience: _options.Audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(_options.AccessTokenLifetimeMinutes), // Dynamic from config
+            expires: DateTime.UtcNow.AddMinutes(_options.AccessTokenLifetimeMinutes),
             signingCredentials: credentials
         );
 
@@ -57,29 +57,52 @@ public class TokenService(
         return Convert.ToBase64String(bytes);
     }
 
-    public async Task CreateRefreshTokenAsync(RefreshToken refreshToken)
+    public Task CreateRefreshTokenAsync(RefreshToken refreshToken)
     {
-        await refreshTokenRepository.AddAsync(refreshToken);
+        return refreshTokenRepository.AddAsync(refreshToken);
     }
 
     public Task<RefreshToken?> GetRefreshTokenAsync(string tokenHash)
     {
-        return refreshTokenRepository.GetByTokenHashAsync(tokenHash);
+        return refreshTokenRepository
+            .GetAllAsync()
+            .FirstOrDefaultAsync(rt => rt.TokenHash == tokenHash);
     }
 
     public async Task RevokeRefreshTokenAsync(RefreshToken refreshToken)
     {
         refreshToken.RevokedAt = DateTime.UtcNow;
-        refreshTokenRepository.Update(refreshToken);
+        await refreshTokenRepository.UpdateAsync(refreshToken);
     }
 
-    public Task<bool> TryRevokeRefreshTokenAsync(Guid tokenId)
+    public async Task<bool> TryRevokeRefreshTokenAsync(Guid tokenId)
     {
-        return refreshTokenRepository.TryRevokeAsync(tokenId);
+        var refreshToken = await refreshTokenRepository.GetByIdAsync(tokenId);
+
+        if (
+            refreshToken is null
+            || refreshToken.RevokedAt is not null
+            || refreshToken.ExpiresAt <= DateTime.UtcNow
+        )
+            return false;
+
+        refreshToken.RevokedAt = DateTime.UtcNow;
+        await refreshTokenRepository.UpdateAsync(refreshToken);
+
+        return true;
     }
 
-    public Task RevokeAllRefreshTokensAsync(Guid userId)
+    public async Task RevokeAllRefreshTokensAsync(Guid userId)
     {
-        return refreshTokenRepository.RevokeAllByUserIdAsync(userId);
+        var activeTokens = await refreshTokenRepository
+            .GetAllAsync()
+            .Where(rt => rt.UserId == userId && rt.RevokedAt == null)
+            .ToListAsync();
+
+        foreach (var token in activeTokens)
+        {
+            token.RevokedAt = DateTime.UtcNow;
+            await refreshTokenRepository.UpdateAsync(token);
+        }
     }
 }

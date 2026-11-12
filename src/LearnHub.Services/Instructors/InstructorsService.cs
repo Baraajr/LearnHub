@@ -1,14 +1,19 @@
 using LearnHub.Data.Entities;
 using LearnHub.Data.Enums;
-using LearnHub.Repositories.Interfaces;
+using LearnHub.Repositories.InstructorProfiles;
+using LearnHub.Repositories.InstructorVerificationHistories;
+using LearnHub.Repositories.UnitOfWorkRepo;
+using LearnHub.Repositories.Users;
 using LearnHub.Services.Exceptions;
 using LearnHub.Services.Instructors.DTOs;
-using LearnHub.Services.Instructors.Interfaces;
-using LearnHub.Services.Users.Interfaces;
+using LearnHub.Services.Users;
+using Microsoft.EntityFrameworkCore;
 
 namespace LearnHub.Services.Instructors;
 
 public class InstructorsService(
+    IUserRepository userRepo,
+    IInstructorProfileRepository instructorRepo,
     IInstructorVerificationHistoryRepository historyRepo,
     IUsersService usersService,
     IUnitOfWork unitOfWork
@@ -16,33 +21,39 @@ public class InstructorsService(
 {
     public async Task<List<InstructorResponseDto>> GetAllAsync()
     {
-        var instructors = await usersService.GetAllAsync(UserRole.INSTRUCTOR);
-
-        return instructors.Select(MapToDto).ToList();
+        return await GetInstructorQuery().ToListAsync();
     }
 
     public async Task<InstructorResponseDto> GetInstructorByIdAsync(Guid userId)
     {
-        var instructor = await GetInstructorOrThrow(userId);
-        return MapToDto(instructor);
+        var instructor = await GetInstructorQuery().FirstOrDefaultAsync(i => i.Id == userId);
+
+        return instructor ?? throw new NotFoundException("Instructor not found.");
     }
 
     public async Task<User> UpdateRoleAsync(Guid adminId, Guid userId, UserRole newRole)
     {
-        // Only instructors can be changed through this endpoint.
-        await GetInstructorOrThrow(userId);
+        var instructor = await userRepo.GetByIdAsync(userId);
+
+        if (instructor is null || instructor.Role != UserRole.INSTRUCTOR)
+            throw new NotFoundException("Instructor not found.");
 
         await usersService.UpdateRoleAsync(adminId, userId, newRole);
 
-        return await usersService.GetUserByIdAsync(userId);
+        return await userRepo.GetByIdAsync(userId)
+            ?? throw new NotFoundException("User not found.");
     }
 
     public async Task<InstructorResponseDto> SetActiveAsync(Guid userId, bool isActive)
     {
-        await GetInstructorOrThrow(userId);
+        var instructor = await userRepo.GetByIdAsync(userId);
 
-        var User = await usersService.SetActiveStatusAsync(userId, isActive);
-        return MapToDto(User);
+        if (instructor is null || instructor.Role != UserRole.INSTRUCTOR)
+            throw new NotFoundException("Instructor not found.");
+
+        await usersService.SetActiveStatusAsync(userId, isActive);
+
+        return await GetInstructorByIdAsync(userId);
     }
 
     public async Task UpdateStatusAsync(Guid adminId, Guid userId, UpdateInstructorStatusDto dto)
@@ -61,10 +72,14 @@ public class InstructorsService(
             throw new BadRequestException("A rejection reason is required.");
         }
 
-        var user = await GetInstructorOrThrow(userId);
+        var user = await userRepo.GetByIdAsync(userId);
 
-        InstructorProfile profile =
-            user.InstructorProfile ?? throw new NotFoundException("Instructor profile not found.");
+        if (user is null || user.Role != UserRole.INSTRUCTOR)
+            throw new NotFoundException("Instructor not found.");
+
+        var profile =
+            await instructorRepo.GetByIdAsync(userId)
+            ?? throw new NotFoundException("Instructor profile not found.");
 
         if (profile.VerificationStatus == status)
             throw new ConflictException("Instructor already has this verification status.");
@@ -78,7 +93,6 @@ public class InstructorsService(
         profile.ReviewedBy = adminId;
         profile.ReviewedAt = now;
         profile.RejectionReason = reason;
-        profile.UpdatedAt = now;
 
         await historyRepo.AddAsync(
             new InstructorVerificationHistory
@@ -96,19 +110,25 @@ public class InstructorsService(
 
     public async Task EnsureCanLoginAsync(Guid userId)
     {
-        var instructor = await GetInstructorOrThrow(userId);
+        var user = await userRepo.GetByIdAsync(userId);
 
-        if (!instructor.IsActive)
+        if (user is null || user.Role != UserRole.INSTRUCTOR)
+            throw new NotFoundException("Instructor not found.");
+
+        if (!user.IsActive)
             throw new ForbiddenException("Your instructor account is inactive.");
 
-#pragma warning disable CS8602 // Dereference of a possibly null reference.
-        switch (instructor.InstructorProfile.VerificationStatus)
+        var profile =
+            await instructorRepo.GetByIdAsync(userId)
+            ?? throw new NotFoundException("Instructor profile not found.");
+
+        switch (profile.VerificationStatus)
         {
             case InstructorVerificationStatus.PENDING:
                 throw new ForbiddenException("Your instructor account is awaiting verification.");
 
             case InstructorVerificationStatus.REJECTED:
-                throw new ForbiddenException("Your instructor application has been rejected.");
+                throw new ForbiddenException("Your instructor application was rejected.");
 
             case InstructorVerificationStatus.VERIFIED:
                 return;
@@ -116,16 +136,65 @@ public class InstructorsService(
             default:
                 throw new ForbiddenException("Your instructor account cannot access the platform.");
         }
-#pragma warning restore CS8602 // Dereference of a possibly null reference.
+    }
+
+    private IQueryable<InstructorResponseDto> GetInstructorQuery()
+    {
+        var users = userRepo.GetAllAsync();
+        var profiles = instructorRepo.GetAllAsync();
+
+        var query =
+            from profile in profiles
+            join user in users on profile.UserId equals user.Id
+            join reviewer in users
+                on profile.ReviewedBy equals (Guid?)reviewer.Id
+                into reviewerGroup
+            from reviewer in reviewerGroup.DefaultIfEmpty()
+            select new InstructorResponseDto
+            {
+                // Account
+                Id = user.Id,
+                UserName = user.UserName!,
+                Email = user.Email!,
+                IsActive = user.IsActive,
+
+                // Verification
+                VerificationStatus = profile.VerificationStatus,
+                ReviewedBy = profile.ReviewedBy,
+                ReviewerName = reviewer == null ? null : reviewer.UserName,
+                ReviewedAt = profile.ReviewedAt,
+                RejectionReason = profile.RejectionReason,
+
+                // Profile audit
+                CreatedAt = profile.CreatedAt,
+                CreatedBy = profile.CreatedBy,
+                UpdatedAt = profile.UpdatedAt,
+                UpdatedBy = profile.UpdatedBy,
+
+                // Account audit
+                AccountCreatedAt = user.CreatedAt,
+                AccountCreatedBy = user.CreatedBy,
+                AccountUpdatedAt = user.UpdatedAt,
+                AccountUpdatedBy = user.UpdatedBy,
+            };
+
+        return query;
     }
 
     public async Task<List<InstructorVerificationHistoryDto>> GetVerificationHistoryAsync(
         Guid instructorId
     )
     {
-        await GetInstructorOrThrow(instructorId);
+        var user = await userRepo.GetByIdAsync(instructorId);
 
-        var history = await historyRepo.GetByInstructorIdAsync(instructorId);
+        if (user is null || user.Role != UserRole.INSTRUCTOR)
+            throw new NotFoundException("Instructor not found.");
+
+        var history = await historyRepo
+            .GetAllAsync()
+            .Where(h => h.InstructorId == instructorId)
+            .OrderByDescending(h => h.CreatedAt)
+            .ToListAsync();
 
         return history
             .Select(h => new InstructorVerificationHistoryDto
@@ -138,41 +207,5 @@ public class InstructorsService(
                 CreatedAt = h.CreatedAt,
             })
             .ToList();
-    }
-
-    private static InstructorResponseDto MapToDto(User user)
-    {
-        var profile = user.InstructorProfile!;
-
-        return new InstructorResponseDto
-        {
-            Id = user.Id,
-            UserName = user.UserName ?? throw new InvalidOperationException("UserName is missing."),
-            Email = user.Email ?? throw new InvalidOperationException("Email is missing."),
-            IsActive = user.IsActive,
-
-            VerificationStatus = profile.VerificationStatus,
-            ReviewedBy = profile.ReviewedBy,
-            ReviewerName = profile.Reviewer?.UserName,
-            ReviewedAt = profile.ReviewedAt,
-            RejectionReason = profile.RejectionReason,
-
-            // Profile audit
-            CreatedAt = profile.CreatedAt,
-            CreatedBy = profile.CreatedBy,
-            UpdatedAt = profile.UpdatedAt,
-            UpdatedBy = profile.UpdatedBy,
-
-            // Account audit
-            AccountCreatedAt = user.CreatedAt,
-            AccountCreatedBy = user.CreatedBy,
-            AccountUpdatedAt = user.UpdatedAt,
-            AccountUpdatedBy = user.UpdatedBy,
-        };
-    }
-
-    private async Task<User> GetInstructorOrThrow(Guid userId)
-    {
-        return await usersService.GetUserByIdAsync(userId, UserRole.INSTRUCTOR);
     }
 }

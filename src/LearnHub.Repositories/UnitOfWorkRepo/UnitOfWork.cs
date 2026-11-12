@@ -1,8 +1,7 @@
 using LearnHub.Data.Context;
-using LearnHub.Repositories.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
-namespace LearnHub.Repositories.Implementations;
+namespace LearnHub.Repositories.UnitOfWorkRepo;
 
 public class UnitOfWork(LearnHubDbContext context) : IUnitOfWork
 {

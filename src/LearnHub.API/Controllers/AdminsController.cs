@@ -1,6 +1,6 @@
 using LearnHub.Data.Enums;
+using LearnHub.Services.Admins;
 using LearnHub.Services.Admins.DTOs;
-using LearnHub.Services.Admins.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 

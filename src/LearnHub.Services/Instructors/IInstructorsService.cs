@@ -2,7 +2,7 @@ using LearnHub.Data.Entities;
 using LearnHub.Data.Enums;
 using LearnHub.Services.Instructors.DTOs;
 
-namespace LearnHub.Services.Instructors.Interfaces;
+namespace LearnHub.Services.Instructors;
 
 public interface IInstructorsService
 {

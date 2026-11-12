@@ -1,12 +1,15 @@
 using LearnHub.Data.Entities;
 using LearnHub.Data.Enums;
-using LearnHub.Repositories.Interfaces;
+using LearnHub.Repositories.InstructorProfiles;
+using LearnHub.Repositories.StudentProfiles;
+using LearnHub.Repositories.UnitOfWorkRepo;
+using LearnHub.Repositories.Users;
 using LearnHub.Services.Auth.DTOs;
-using LearnHub.Services.Auth.Interfaces;
 using LearnHub.Services.Exceptions;
-using LearnHub.Services.Instructors.Interfaces;
+using LearnHub.Services.Instructors;
 using LearnHub.Services.Options;
-using LearnHub.Services.Students.Interfaces;
+using LearnHub.Services.Students;
+using LearnHub.Services.Tokens;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 
