@@ -19,15 +19,12 @@ public static class DependencyInjection
     {
         services.AddData(configuration);
 
-        services.AddScoped<IUserRepository, UserRepository>();
-        services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
-        services.AddScoped<IUnitOfWork, UnitOfWork>();
-        services.AddScoped<IInstructorProfileRepository, InstructorProfileRepository>();
-        services.AddScoped<
-            IInstructorVerificationHistoryRepository,
-            InstructorVerificationHistoryRepository
-        >();
-        services.AddScoped<IStudentProfileRepository, StudentProfileRepository>();
+        services.Scan(scan =>
+            scan.FromAssemblyOf<IUserRepository>()
+                .AddClasses(c => c.AssignableTo<IScopedRepository>())
+                .As(t => t.GetInterfaces().Where(i => i != typeof(IScopedRepository)))
+                .WithScopedLifetime()
+        );
 
         return services;
     }

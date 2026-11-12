@@ -14,7 +14,7 @@ namespace LearnHub.Services.Tokens;
 public class TokenService(
     IOptions<JwtOptions> options,
     IRefreshTokenRepository refreshTokenRepository
-) : ITokenService
+) : ITokenService, IScopedService
 {
     private readonly JwtOptions _options = options.Value;
 

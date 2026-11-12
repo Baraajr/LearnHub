@@ -25,7 +25,7 @@ public class AuthService(
     IUnitOfWork unitOfWork,
     IOptions<JwtOptions> jwtOptions,
     UserManager<User> userManager
-) : IAuthService
+) : IAuthService, IScopedService
 {
     private readonly JwtOptions _jwtOptions = jwtOptions.Value;
 

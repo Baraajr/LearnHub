@@ -8,7 +8,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LearnHub.Services.Admins;
 
-public class AdminService(IUserRepository userRepository, IUnitOfWork unitOfWork) : IAdminService
+public class AdminService(IUserRepository userRepository, IUnitOfWork unitOfWork)
+    : IAdminService,
+        IScopedService
 {
     public async Task<IReadOnlyList<AdminDto>> GetAllAsync()
     {

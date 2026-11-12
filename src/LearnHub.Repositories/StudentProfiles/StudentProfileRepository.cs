@@ -4,7 +4,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LearnHub.Repositories.StudentProfiles;
 
-public class StudentProfileRepository(LearnHubDbContext context) : IStudentProfileRepository
+public class StudentProfileRepository(LearnHubDbContext context)
+    : IStudentProfileRepository,
+        IScopedRepository
 {
     public IQueryable<StudentProfile> GetAllAsync()
     {

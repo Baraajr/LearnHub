@@ -17,7 +17,7 @@ public class InstructorsService(
     IInstructorVerificationHistoryRepository historyRepo,
     IUsersService usersService,
     IUnitOfWork unitOfWork
-) : IInstructorsService
+) : IInstructorsService, IScopedService
 {
     public async Task<List<InstructorResponseDto>> GetAllAsync()
     {

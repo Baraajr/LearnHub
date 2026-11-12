@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LearnHub.Repositories.UnitOfWorkRepo;
 
-public class UnitOfWork(LearnHubDbContext context) : IUnitOfWork
+public class UnitOfWork(LearnHubDbContext context) : IUnitOfWork, IScopedRepository
 {
     private readonly LearnHubDbContext _context = context;
 

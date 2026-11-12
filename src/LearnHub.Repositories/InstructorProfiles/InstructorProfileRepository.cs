@@ -4,7 +4,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LearnHub.Repositories.InstructorProfiles;
 
-public class InstructorProfileRepository(LearnHubDbContext context) : IInstructorProfileRepository
+public class InstructorProfileRepository(LearnHubDbContext context)
+    : IInstructorProfileRepository,
+        IScopedRepository
 {
     public IQueryable<InstructorProfile> GetAllAsync()
     {

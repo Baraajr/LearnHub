@@ -14,7 +14,7 @@ public class UsersService(
     IStudentProfileRepository studentRepo,
     IInstructorProfileRepository instructorRepo,
     IUnitOfWork unitOfWork
-) : IUsersService
+) : IUsersService, IScopedService
 {
     public async Task<List<User>> GetAllAsync(UserRole? role = null)
     {

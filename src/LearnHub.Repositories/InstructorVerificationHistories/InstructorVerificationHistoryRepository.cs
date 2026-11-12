@@ -5,7 +5,8 @@ using Microsoft.EntityFrameworkCore;
 namespace LearnHub.Repositories.InstructorVerificationHistories;
 
 public class InstructorVerificationHistoryRepository(LearnHubDbContext context)
-    : IInstructorVerificationHistoryRepository
+    : IInstructorVerificationHistoryRepository,
+        IScopedRepository
 {
     public async Task AddAsync(InstructorVerificationHistory history)
     {

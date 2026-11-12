@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LearnHub.Repositories.Users;
 
-public class UserRepository(LearnHubDbContext context) : IUserRepository
+public class UserRepository(LearnHubDbContext context) : IUserRepository, IScopedRepository
 {
     public IQueryable<User> GetAllAsync()
     {

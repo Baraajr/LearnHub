@@ -4,7 +4,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LearnHub.Repositories.RefreshTokens;
 
-public class RefreshTokenRepository(LearnHubDbContext context) : IRefreshTokenRepository
+public class RefreshTokenRepository(LearnHubDbContext context)
+    : IRefreshTokenRepository,
+        IScopedRepository
 {
     public async Task AddAsync(RefreshToken refreshToken)
     {

@@ -13,7 +13,7 @@ public class StudentsService(
     IUserRepository userRepo,
     IStudentProfileRepository studentRepo,
     IUsersService usersService
-) : IStudentsService
+) : IStudentsService, IScopedService
 {
     public async Task<List<StudentResponseDto>> GetAllAsync()
     {

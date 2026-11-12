@@ -1,15 +1,9 @@
 using System.Text;
 using LearnHub.Data.Context;
 using LearnHub.Data.Entities;
-using LearnHub.Data.Interfaces;
 using LearnHub.Repositories;
-using LearnHub.Services.Admins;
 using LearnHub.Services.Auth;
-using LearnHub.Services.Instructors;
 using LearnHub.Services.Options;
-using LearnHub.Services.Students;
-using LearnHub.Services.Tokens;
-using LearnHub.Services.Users;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -52,13 +46,12 @@ public static class DependencyInjection
             )
             .ValidateOnStart();
 
-        services.AddScoped<IAuthService, AuthService>();
-        services.AddScoped<ITokenService, TokenService>();
-        services.AddScoped<IAdminService, AdminService>();
-        services.AddScoped<IUsersService, UsersService>();
-        services.AddScoped<IInstructorsService, InstructorsService>();
-        services.AddScoped<IStudentsService, StudentsService>();
-        services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.Scan(scan =>
+            scan.FromAssemblyOf<IAuthService>()
+                .AddClasses(c => c.AssignableTo<IScopedService>())
+                .As(t => t.GetInterfaces().Where(i => i != typeof(IScopedService)))
+                .WithScopedLifetime()
+        );
 
         return services;
     }
